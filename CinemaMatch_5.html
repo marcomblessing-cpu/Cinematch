@@ -100,20 +100,20 @@ input::placeholder{color:#4A4A50}
 /* ── Bottom buttons ── */
 #swipe-btns{display:flex;justify-content:center;align-items:center;gap:22px;padding:10px 20px;padding-bottom:calc(16px + env(safe-area-inset-bottom));flex-shrink:0}
 .nope-btn{
-  width:60px;height:60px;border-radius:50%;
-  background:#111115;border:1px solid rgba(200,80,70,.28);
-  font-size:18px;color:rgba(210,95,85,.75);
+  width:62px;height:62px;border-radius:50%;
+  background:#C0392B;border:none;
+  font-size:20px;font-weight:700;color:#fff;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   flex-shrink:0;touch-action:manipulation;
-  box-shadow:0 2px 14px rgba(0,0,0,.35);
+  box-shadow:0 4px 18px rgba(192,57,43,.35);
 }
 .like-btn{
-  width:60px;height:60px;border-radius:50%;
-  background:#111115;border:1px solid rgba(201,168,76,.28);
-  font-size:22px;cursor:pointer;
+  width:62px;height:62px;border-radius:50%;
+  background:#27AE60;border:none;
+  font-size:24px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;touch-action:manipulation;
-  box-shadow:0 2px 14px rgba(0,0,0,.35);
+  box-shadow:0 4px 18px rgba(39,174,96,.3);
 }
 .pause-btn{background:transparent;border:1px solid #2A2A32;border-radius:10px;padding:9px 16px;font-size:11px;font-weight:300;color:#4A4A50;cursor:pointer;touch-action:manipulation}
 
@@ -663,14 +663,15 @@ function loadImgTimeout(path, ms=8000) {
   ]);
 }
 
-// Holt garantiert korrekten Poster-Pfad von TMDB (gecacht)
-// Jede Karte bekommt so immer das passende Poster zum richtigen Titel
+// Holt garantiert korrekten Poster-Pfad von TMDB (gecacht).
+// Kein language-Parameter → TMDB gibt immer den primären Poster zurück,
+// auch wenn kein lokalisierter existiert.
 const freshPosterCache = new Map();
 function fetchFreshPoster(item) {
   if (!item?.id || !item?.tp) return Promise.resolve(null);
   const key = `${item.tp}_${item.id}`;
   if (freshPosterCache.has(key)) return freshPosterCache.get(key);
-  const p = fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}&language=de-DE`)
+  const p = fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}`)
     .then(r => r.ok ? r.json() : null)
     .then(d => d?.poster_path || null)
     .catch(() => null);
@@ -678,25 +679,32 @@ function fetchFreshPoster(item) {
   return p;
 }
 
-// Lädt Poster — holt zuerst den aktuellen Pfad von TMDB, dann das Bild
+// Aktualisiert item.p mit dem frischen TMDB-Pfad und bereinigt alten Cache-Eintrag
+function applyFreshPath(item, freshPath) {
+  if (freshPath && freshPath !== item.p) {
+    imgCache.delete(item.p);
+    item.p = freshPath;
+  }
+}
+
+// Lädt Poster — wartet auf korrekten TMDB-Pfad, dann Bild
 function loadPoster(item, ms=8000) {
   if (!item) return Promise.resolve(null);
   if (!item.id || !item.tp) return loadImgTimeout(item.p, ms);
-  return fetchFreshPoster(item).then(freshPath => {
-    if (freshPath && freshPath !== item.p) {
-      imgCache.delete(item.p);
-      item.p = freshPath;
-    }
-    return loadImgTimeout(item.p, ms);
-  }).catch(() => loadImgTimeout(item.p, ms));
+  return fetchFreshPoster(item)
+    .then(freshPath => { applyFreshPath(item, freshPath); return loadImgTimeout(item.p, ms); })
+    .catch(() => loadImgTimeout(item.p, ms));
 }
 
-// Vorausladen: TMDB-Pfad + Bild im Hintergrund cachen
+// Vorausladen: korrekten TMDB-Pfad holen → item.p aktualisieren → Bild cachen
 function preloadImages(items) {
   items.forEach(item => {
     if (!item) return;
     if (item.id && item.tp) {
-      fetchFreshPoster(item).then(() => { if (item.p) loadImg(item.p); });
+      fetchFreshPoster(item).then(freshPath => {
+        applyFreshPath(item, freshPath);
+        if (item.p) loadImg(item.p);
+      });
     } else if (item.p) {
       loadImg(item.p);
     }
