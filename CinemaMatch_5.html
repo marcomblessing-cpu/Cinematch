@@ -564,6 +564,7 @@ const S = {
 function save() {
   try {
     localStorage.setItem("cm_names",   JSON.stringify(S.names));
+    localStorage.setItem("cm_media",   S.media);
     localStorage.setItem("cm_p1l",     JSON.stringify(S.p1Liked));
     localStorage.setItem("cm_p2l",     JSON.stringify(S.p2Liked));
     localStorage.setItem("cm_p1s",     JSON.stringify([...S.p1Seen]));
@@ -574,18 +575,20 @@ function save() {
 
 function load() {
   try {
-    const ns  = localStorage.getItem("cm_names");
-    const p1l = localStorage.getItem("cm_p1l");
-    const p2l = localStorage.getItem("cm_p2l");
-    const p1s = localStorage.getItem("cm_p1s");
-    const p2s = localStorage.getItem("cm_p2s");
-    const ms  = localStorage.getItem("cm_matches");
-    if (ns)  { const n=JSON.parse(ns); S.names=n; S.nameEdit={...n}; }
-    if (p1l) S.p1Liked = JSON.parse(p1l);
-    if (p2l) S.p2Liked = JSON.parse(p2l);
-    if (p1s) S.p1Seen  = new Set(JSON.parse(p1s));
-    if (p2s) S.p2Seen  = new Set(JSON.parse(p2s));
-    if (ms)  S.matches  = JSON.parse(ms);
+    const ns    = localStorage.getItem("cm_names");
+    const media = localStorage.getItem("cm_media");
+    const p1l   = localStorage.getItem("cm_p1l");
+    const p2l   = localStorage.getItem("cm_p2l");
+    const p1s   = localStorage.getItem("cm_p1s");
+    const p2s   = localStorage.getItem("cm_p2s");
+    const ms    = localStorage.getItem("cm_matches");
+    if (ns)    { const n=JSON.parse(ns); S.names=n; S.nameEdit={...n}; }
+    if (media) S.media   = media;
+    if (p1l)   S.p1Liked = JSON.parse(p1l);
+    if (p2l)   S.p2Liked = JSON.parse(p2l);
+    if (p1s)   S.p1Seen  = new Set(JSON.parse(p1s));
+    if (p2s)   S.p2Seen  = new Set(JSON.parse(p2s));
+    if (ms)    S.matches  = JSON.parse(ms);
     S.screen = ns ? "select" : "names";
   } catch(e) { S.screen = "names"; }
 }
@@ -593,28 +596,34 @@ function load() {
 // ══════════════════════════════════════════════════════════
 // QUEUE
 // ══════════════════════════════════════════════════════════
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function buildQueue() {
   const seen = S.player==="p1" ? S.p1Seen : S.p2Seen;
   const all  = [...TITLES, ...S.extraTitles];
   let pool;
   if (S.media==="both") {
-    const mv = all.filter(m=>m.tp==="movie"&&!seen.has(String(m.id)));
-    const tv = all.filter(m=>m.tp==="tv"&&!seen.has(String(m.id)));
+    const mv = shuffle(all.filter(m=>m.tp==="movie"&&!seen.has(String(m.id))));
+    const tv = shuffle(all.filter(m=>m.tp==="tv"&&!seen.has(String(m.id))));
     pool=[];
     for(let i=0;i<Math.max(mv.length,tv.length);i++){
       if(mv[i])pool.push(mv[i]);
       if(tv[i])pool.push(tv[i]);
     }
   } else {
-    pool = all.filter(m=>m.tp===S.media&&!seen.has(String(m.id)));
+    pool = shuffle(all.filter(m=>m.tp===S.media&&!seen.has(String(m.id))));
   }
   if (!pool.length) {
-    // Reset seen and restart
     if(S.player==="p1")S.p1Seen=new Set();else S.p2Seen=new Set();
     return buildQueue();
   }
   S.queue = pool;
-  // Sofort die ersten 10 Bilder vorausladen
   preloadImages(pool.slice(0,10));
 }
 
@@ -652,6 +661,35 @@ function loadImgTimeout(path, ms=8000) {
     loadImg(path),
     new Promise(r => setTimeout(()=>r(null), ms))
   ]);
+}
+
+// TMDB-Fallback: holt aktuellen Poster-Pfad wenn gespeicherter Pfad fehlschlägt
+const posterFallbackCache = new Map();
+function fetchPosterFallback(tp, id) {
+  const key = `${tp}_${id}`;
+  if (posterFallbackCache.has(key)) return posterFallbackCache.get(key);
+  const p = fetch(`${BASE}/${tp}/${id}?api_key=${API}&language=de-DE`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => d?.poster_path || null)
+    .catch(() => null);
+  posterFallbackCache.set(key, p);
+  return p;
+}
+
+// Lädt Poster mit TMDB-Fallback — aktualisiert item.p bei Erfolg
+function loadPoster(item, ms=8000) {
+  if (!item) return Promise.resolve(null);
+  return loadImgTimeout(item.p, ms).then(imgEl => {
+    if (imgEl) return imgEl;
+    if (!item.id || !item.tp) return null;
+    return fetchPosterFallback(item.tp, item.id).then(newPath => {
+      if (!newPath || newPath === item.p) return null;
+      const oldPath = item.p;
+      item.p = newPath;
+      imgCache.delete(oldPath);
+      return loadImgTimeout(newPath, 5000);
+    });
+  });
 }
 
 // Lädt die nächsten N Bilder im Hintergrund vor
@@ -835,27 +873,76 @@ function renderLoading(){
 }
 
 function renderNames(){
-  setHTML(`<div class="fade-up screen" style="max-width:360px">
-    <div style="text-align:center;margin-bottom:34px">${logoHTML(false)}
-      <p style="margin-top:11px;font-size:13px;color:#8A8780;line-height:1.7;font-weight:300">Wie heißt ihr?</p>
-    </div>
-    <div class="card-box">
-      <div style="margin-bottom:13px">
-        <div class="label-sm">Spieler 1</div>
-        <input id="n1" class="inp" placeholder="Dein Name…" value="${esc(S.nameEdit.p1)}" autocomplete="off">
+  const returning = S.nameEdit.p1 || S.nameEdit.p2;
+  setHTML(`
+  <div style="position:fixed;inset:0;background:linear-gradient(160deg,#FFFDF8 0%,#F5F0E8 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;z-index:10">
+    <div style="min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 20px;padding-top:max(40px,env(safe-area-inset-top));padding-bottom:max(32px,env(safe-area-inset-bottom))">
+
+      <!-- Logo -->
+      <div style="text-align:center;margin-bottom:36px">
+        <div style="width:80px;height:80px;border-radius:26px;background:linear-gradient(140deg,#C9A84C,#A88A38);display:flex;align-items:center;justify-content:center;font-size:36px;margin:0 auto 18px;box-shadow:0 10px 36px rgba(201,168,76,.28)">🎬</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:400;color:#1A1710;letter-spacing:.5px;line-height:1">CinemaMatch</div>
+        <div style="margin-top:8px;font-size:14px;color:#9A9080;font-weight:300">${returning ? 'Willkommen zurück! Namen anpassen?' : 'Wie heißt ihr?'}</div>
       </div>
-      <div><div class="label-sm">Spieler 2</div>
-        <input id="n2" class="inp" placeholder="Ihr Name…" value="${esc(S.nameEdit.p2)}" autocomplete="off">
+
+      <!-- Player 1 -->
+      <div style="width:100%;max-width:360px;background:#fff;border-radius:22px;padding:20px;margin-bottom:12px;box-shadow:0 4px 24px rgba(0,0,0,.07);border:1.5px solid #EDE8DE">
+        <div style="display:flex;align-items:center;gap:13px;margin-bottom:14px">
+          <div style="width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#FDF3DC,#F5E5B0);border:1.5px solid rgba(201,168,76,.35);display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0">🍿</div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:1.4px;text-transform:uppercase">Spieler 1</div>
+            <div style="font-size:12px;color:#B0A898;margin-top:1px;font-weight:300">Dein Name</div>
+          </div>
+        </div>
+        <input id="n1"
+          style="width:100%;background:#FAF8F3;border:1.5px solid #EAE4D8;border-radius:13px;padding:14px 16px;color:#1A1710;font-size:16px;font-weight:400;font-family:inherit;-webkit-appearance:none;appearance:none;outline:none;transition:border-color .18s"
+          placeholder="Dein Name…"
+          value="${esc(S.nameEdit.p1)}"
+          autocomplete="off"
+          onfocus="this.style.borderColor='#C9A84C'"
+          onblur="this.style.borderColor='#EAE4D8'">
       </div>
+
+      <!-- Player 2 -->
+      <div style="width:100%;max-width:360px;background:#fff;border-radius:22px;padding:20px;margin-bottom:28px;box-shadow:0 4px 24px rgba(0,0,0,.07);border:1.5px solid #EDE8DE">
+        <div style="display:flex;align-items:center;gap:13px;margin-bottom:14px">
+          <div style="width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#E8EBFA,#CDD3F5);border:1.5px solid rgba(108,123,196,.35);display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0">🎬</div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#6C7BC4;letter-spacing:1.4px;text-transform:uppercase">Spieler 2</div>
+            <div style="font-size:12px;color:#B0A898;margin-top:1px;font-weight:300">Ihr Name</div>
+          </div>
+        </div>
+        <input id="n2"
+          style="width:100%;background:#FAF8F3;border:1.5px solid #EAE4D8;border-radius:13px;padding:14px 16px;color:#1A1710;font-size:16px;font-weight:400;font-family:inherit;-webkit-appearance:none;appearance:none;outline:none;transition:border-color .18s"
+          placeholder="Ihr Name…"
+          value="${esc(S.nameEdit.p2)}"
+          autocomplete="off"
+          onfocus="this.style.borderColor='#6C7BC4'"
+          onblur="this.style.borderColor='#EAE4D8'">
+      </div>
+
+      <!-- CTA -->
+      <button
+        style="width:100%;max-width:360px;background:linear-gradient(135deg,#C9A84C,#A88A38);color:#fff;border:none;border-radius:17px;padding:17px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 6px 24px rgba(201,168,76,.32);letter-spacing:.3px;touch-action:manipulation;transition:opacity .14s"
+        onclick="saveNames()"
+        onmousedown="this.style.opacity='.85'"
+        onmouseup="this.style.opacity='1'"
+        ontouchstart="this.style.opacity='.85'"
+        ontouchend="this.style.opacity='1'">
+        Los geht's →
+      </button>
+
     </div>
-    <button class="gold-btn press" onclick="saveNames()">Weiter →</button>
   </div>`);
   setTimeout(()=>{
     const n1=document.getElementById('n1');
     const n2=document.getElementById('n2');
-    if(n1)n1.addEventListener('keydown',e=>e.key==='Enter'&&saveNames());
-    if(n2)n2.addEventListener('keydown',e=>e.key==='Enter'&&saveNames());
-  },0);
+    if(n1){
+      n1.addEventListener('keydown',e=>e.key==='Enter'&&n2?.focus());
+      if(!S.nameEdit.p1) n1.focus();
+    }
+    if(n2) n2.addEventListener('keydown',e=>e.key==='Enter'&&saveNames());
+  },50);
 }
 
 function renderSelect(){
@@ -917,7 +1004,7 @@ function renderSwipe(){
   if(bg&&bg.p){
     const bgEl=document.getElementById('bg-card');
     if(bgEl){
-      loadImgTimeout(bg.p, 5000).then(imgEl=>{
+      loadPoster(bg, 5000).then(imgEl=>{
         if(!imgEl||!document.getElementById('bg-card'))return;
         const img=document.createElement('img');
         img.className='card-img loaded';
@@ -964,7 +1051,7 @@ function buildCardEl(card){
   }, 3000);
 
   // Warten bis Bild fertig geladen — dann Karte einblenden
-  loadImgTimeout(card.p, 8000).then(imgEl => {
+  loadPoster(card, 8000).then(imgEl => {
     clearTimeout(slowTimer);
     // Slot noch gültig? (User könnte schon weiter geswipt haben)
     if(!document.getElementById('card-slot')) return;
@@ -1104,8 +1191,8 @@ function startPlayer(p){
   buildQueue();
   // Erstes Bild laden, dann Screen wechseln — kein Placeholder
   const first = S.queue[0];
-  if(first && first.p){
-    loadImgTimeout(first.p, 8000).then(()=>{
+  if(first){
+    loadPoster(first, 8000).then(()=>{
       S.screen='swipe';render();
     });
     // Gleichzeitig nächste Bilder starten
