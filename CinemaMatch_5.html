@@ -663,52 +663,64 @@ function loadImgTimeout(path, ms=8000) {
   ]);
 }
 
-// Holt garantiert korrekten Poster-Pfad von TMDB (gecacht).
-// Kein language-Parameter → TMDB gibt immer den primären Poster zurück,
-// auch wenn kein lokalisierter existiert.
-const freshPosterCache = new Map();
-function fetchFreshPoster(item) {
+// ═══════════════════════════════════════════════════════════════════
+// POSTER-SYSTEM — Verifizierte Pfade per ID, unabhängig von item.p
+//
+// correctPaths:  "${tp}:${id}" → poster_path  (nur wenn TMDB bestätigt)
+// pathFetches:   "${tp}:${id}" → laufendes Promise (kein Doppel-Fetch)
+//
+// Warum separate Map statt item.p:
+//   fetchProviderBg() spreizt Queue-Objekte ({...m, pr:p}) → neue Objekte
+//   mit altem item.p. Updates auf alten Objekten gehen verloren.
+//   correctPaths ist per ID indexiert und von Objekt-Identität unabhängig.
+// ═══════════════════════════════════════════════════════════════════
+const correctPaths = new Map();
+const pathFetches  = new Map();
+
+function fetchVerifiedPath(item) {
   if (!item?.id || !item?.tp) return Promise.resolve(null);
-  const key = `${item.tp}_${item.id}`;
-  if (freshPosterCache.has(key)) return freshPosterCache.get(key);
-  const p = fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}`)
-    .then(r => r.ok ? r.json() : null)
-    .then(d => d?.poster_path || null)
-    .catch(() => null);
-  freshPosterCache.set(key, p);
+  const key = `${item.tp}:${item.id}`;
+  if (correctPaths.has(key)) return Promise.resolve(correctPaths.get(key));
+  if (pathFetches.has(key))  return pathFetches.get(key);
+  const doFetch = () =>
+    fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.poster_path || null)
+      .catch(() => null);
+  const p = doFetch().then(path => {
+    if (path) { correctPaths.set(key, path); return path; }
+    // Einmal nachversuchen nach 1s (z.B. bei Rate-Limit)
+    return new Promise(r => setTimeout(r, 1000)).then(doFetch).then(p2 => {
+      if (p2) correctPaths.set(key, p2);
+      return p2;
+    });
+  });
+  pathFetches.set(key, p);
   return p;
 }
 
-// Aktualisiert item.p mit dem frischen TMDB-Pfad und bereinigt alten Cache-Eintrag
-function applyFreshPath(item, freshPath) {
-  if (freshPath && freshPath !== item.p) {
-    imgCache.delete(item.p);
-    item.p = freshPath;
-  }
-}
-
-// Lädt Poster — wartet auf korrekten TMDB-Pfad, dann Bild
+// Lädt Poster — used verified path, nie direkt item.p als Quelle
 function loadPoster(item, ms=8000) {
   if (!item) return Promise.resolve(null);
   if (!item.id || !item.tp) return loadImgTimeout(item.p, ms);
-  return fetchFreshPoster(item)
-    .then(freshPath => { applyFreshPath(item, freshPath); return loadImgTimeout(item.p, ms); })
-    .catch(() => loadImgTimeout(item.p, ms));
+  const key = `${item.tp}:${item.id}`;
+  const known = correctPaths.get(key);
+  if (known) return loadImgTimeout(known, ms);
+  return Promise.race([
+    fetchVerifiedPath(item).then(path => loadImgTimeout(path || item.p, ms)),
+    new Promise(r => setTimeout(() => r(null), ms))
+  ]);
 }
 
-// Vorausladen: korrekten TMDB-Pfad holen → item.p aktualisieren → Bild cachen
+// Wärmt Poster-Cache vor (TMDB-Pfad holen + Bild im Hintergrund laden)
+function warmPoster(item) {
+  if (!item) return;
+  if (!item.id || !item.tp) { if (item.p) loadImg(item.p); return; }
+  fetchVerifiedPath(item).then(path => { if (path || item.p) loadImg(path || item.p); });
+}
+
 function preloadImages(items) {
-  items.forEach(item => {
-    if (!item) return;
-    if (item.id && item.tp) {
-      fetchFreshPoster(item).then(freshPath => {
-        applyFreshPath(item, freshPath);
-        if (item.p) loadImg(item.p);
-      });
-    } else if (item.p) {
-      loadImg(item.p);
-    }
-  });
+  items.forEach(item => { if (item) warmPoster(item); });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -784,8 +796,8 @@ function doSwipe(dir) {
   setTimeout(()=>{
     S.animating=false;
     S.queue.shift();
-    // Nächstes Bild sofort laden (Promise starten)
-    if(S.queue[0]&&S.queue[0].p) loadImg(S.queue[0].p);
+    // Nächstes Bild sofort laden (verifizierter Pfad)
+    if(S.queue[0]) warmPoster(S.queue[0]);
     // Weitere 7 Bilder im Hintergrund vorausladen
     preloadImages(S.queue.slice(1,8));
     if(S.queue.length<5){
