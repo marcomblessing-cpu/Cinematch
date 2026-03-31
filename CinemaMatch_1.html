@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0C0C0F">
+<title>CinemaMatch</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{height:100%;height:-webkit-fill-available;background:#0C0C0F;overflow:hidden}
+body{height:100%;height:-webkit-fill-available;background:#0C0C0F;overflow:hidden;-webkit-font-smoothing:antialiased;font-family:'DM Sans',sans-serif;color:#F2EEE4;-webkit-text-size-adjust:100%}
+button,input{font-family:inherit;-webkit-appearance:none;appearance:none}
+input{-webkit-user-select:auto;user-select:auto;font-size:16px!important}/* 16px verhindert iOS-Zoom */
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:#2A2A32;border-radius:2px}
+
+/* ── Layout ── */
+#app{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  overflow:hidden;user-select:none;
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+}
+
+/* ── Animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes matchPop{0%{opacity:0;transform:scale(.5)}65%{transform:scale(1.04)}100%{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.16)}}
+.fade-up{animation:fadeUp .4s cubic-bezier(.22,1,.36,1) both}
+.fade-in{animation:fadeIn .25s ease both}
+.serif{font-family:'Cormorant Garamond',serif}
+.spinner{width:28px;height:28px;border:1.5px solid #2A2A32;border-top-color:#C9A84C;border-radius:50%;animation:spin .9s linear infinite;display:inline-block}
+
+/* ── Interactivity ── */
+.press{transition:transform .12s ease,opacity .12s ease;cursor:pointer;touch-action:manipulation}
+.press:active{transform:scale(.9)!important;opacity:.65}
+.pl{cursor:pointer;touch-action:manipulation}
+.pl:active{opacity:.5}
+input:focus{outline:2px solid rgba(201,168,76,.4);outline-offset:0}
+input::placeholder{color:#4A4A50}
+
+/* ── Screens ── */
+.screen{width:100%;max-width:430px;padding:0 20px}
+
+/* ── Card area ── */
+#swipe-wrap{width:100%;max-width:430px;height:100%;display:flex;flex-direction:column}
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;flex-shrink:0}
+#card-stage{flex:1;position:relative;overflow:hidden;padding:4px 12px 0}
+
+/* ── Cards ── */
+.card{
+  position:absolute;inset:10px;border-radius:22px;overflow:hidden;
+  background:#18181D;touch-action:none;
+  will-change:transform;-webkit-backface-visibility:hidden;backface-visibility:hidden;
+}
+.card-main{
+  cursor:grab;
+  box-shadow:0 16px 50px rgba(0,0,0,.65);
+  transition:none;
+}
+.card-main.snap-back{transition:transform .22s ease}
+.card-main.flying{transition:transform .34s cubic-bezier(.22,1,.36,1),opacity .34s ease}
+.card-bg{transform:scale(.93) translateY(11px);opacity:.36;pointer-events:none}
+
+/* ── Card image ── */
+.card-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;display:block;
+  opacity:0;transition:opacity .25s ease;/* fade in AFTER loaded */
+}
+.card-img.loaded{opacity:1}
+.card-placeholder{
+  position:absolute;inset:0;
+  background:linear-gradient(160deg,#1a1a22,#111115);
+  display:flex;align-items:center;justify-content:center;
+  font-size:64px;color:#2A2A32;
+}
+.card-gradient{
+  position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(to top,rgba(5,5,9,.97) 0%,rgba(5,5,9,.5) 42%,transparent 68%);
+}
+.card-info{position:absolute;bottom:0;left:0;right:0;padding:14px 16px 18px;pointer-events:none}
+
+/* ── Stamps ── */
+.stamp{
+  position:absolute;top:22px;border:2.5px solid;border-radius:9px;
+  padding:5px 14px;font-size:18px;font-weight:700;
+  opacity:0;transition:opacity .05s;letter-spacing:1.5px;pointer-events:none;
+}
+#like-stamp{left:18px;color:#4ADE80;border-color:#4ADE80;background:rgba(74,222,128,.14);transform:rotate(-13deg)}
+#nope-stamp{right:18px;color:#F87171;border-color:#F87171;background:rgba(248,113,113,.14);transform:rotate(13deg)}
+
+/* ── Badges ── */
+.pbadge{font-size:10px;font-weight:600;color:#fff;border-radius:5px;padding:3px 8px;display:inline-block;line-height:1.4}
+.gtag{font-size:11px;color:rgba(255,255,255,.4);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:2px 9px;display:inline-block;line-height:1.5}
+.prow{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.grow{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+
+/* ── Bottom buttons ── */
+#swipe-btns{display:flex;justify-content:center;align-items:center;gap:22px;padding:10px 20px;padding-bottom:calc(16px + env(safe-area-inset-bottom));flex-shrink:0}
+.nope-btn{
+  width:64px;height:64px;border-radius:50%;
+  background:#F87171;border:2px solid #ef4444;
+  font-size:22px;font-weight:700;color:#fff;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  box-shadow:0 4px 20px rgba(248,113,113,.4);
+}
+.like-btn{
+  width:64px;height:64px;border-radius:50%;
+  background:rgba(74,222,128,.14);border:2px solid rgba(74,222,128,.65);
+  font-size:26px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  box-shadow:0 4px 20px rgba(74,222,128,.18);
+}
+.pause-btn{background:transparent;border:1px solid #2A2A32;border-radius:10px;padding:9px 16px;font-size:11px;font-weight:300;color:#4A4A50;cursor:pointer;touch-action:manipulation}
+
+/* ── UI Buttons ── */
+.gold-btn{background:linear-gradient(135deg,#C9A84C,#A88A38);color:#0C0C0F;border:none;border-radius:13px;padding:13px 20px;font-size:15px;font-weight:500;cursor:pointer;width:100%;touch-action:manipulation}
+.topbar-btn{background:#111115;border:1px solid #2A2A32;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:300;color:#8A8780;cursor:pointer;touch-action:manipulation;white-space:nowrap}
+.topbar-btn.gold{background:rgba(201,168,76,.10);border-color:rgba(201,168,76,.22);color:#C9A84C;font-weight:500}
+.tab-btn{flex:1;background:transparent;border:1px solid transparent;border-radius:10px;padding:9px 0;font-size:12px;font-weight:400;color:#8A8780;cursor:pointer;transition:all .18s;touch-action:manipulation}
+.tab-btn.active{background:#222228;border-color:#38383F;color:#F2EEE4;font-weight:600}
+.player-btn{display:flex;align-items:center;gap:14px;background:#111115;border:1px solid #2A2A32;border-radius:16px;padding:14px 16px;cursor:pointer;text-align:left;width:100%;touch-action:manipulation}
+.match-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.22);border-radius:20px;padding:7px 13px;font-size:12px;font-weight:500;color:#C9A84C;cursor:pointer;white-space:nowrap;touch-action:manipulation}
+.small-btn{background:linear-gradient(135deg,#C9A84C,#A88A38);color:#0C0C0F;border:none;border-radius:10px;padding:9px 22px;font-size:13px;font-weight:500;cursor:pointer;touch-action:manipulation}
+
+/* ── Match overlay ── */
+#match-overlay{position:fixed;inset:0;background:rgba(10,10,13,.94);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);display:none;align-items:center;justify-content:center;z-index:1000;padding:28px;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+#match-overlay.show{display:flex;animation:fadeIn .3s ease both}
+
+/* ── Matches list ── */
+.matches-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.match-card{background:#111115;border-radius:14px;overflow:hidden;border:1px solid #2A2A32}
+.match-card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}
+
+/* ── Misc ── */
+.card-box{background:#111115;border:1px solid #2A2A32;border-radius:16px;padding:22px;margin-bottom:14px}
+.label-sm{font-size:10px;letter-spacing:1.5px;color:#4A4A50;text-transform:uppercase;font-weight:500;margin-bottom:7px}
+.inp{width:100%;background:#222228;border:1px solid #1E1E24;border-radius:10px;padding:12px 14px;color:#F2EEE4;font-size:16px;font-weight:300}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="match-overlay"></div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════
+//  CinemaMatch — v3  |  standalone HTML, kein Server nötig
+// ═══════════════════════════════════════════════════════
+const API  = "3cb2c4540c82c05ee68159ecf369d2b2";
+const BASE = "https://api.themoviedb.org/3";
+const IMG  = "https://image.tmdb.org/t/p/w780";
+const IMG_SM = "https://image.tmdb.org/t/p/w342";
+
+const PROV = {
+  8:{n:"Netflix",c:"#E50914"},119:{n:"Prime",c:"#1399FF"},9:{n:"Amazon",c:"#00A8E0"},
+  337:{n:"Disney+",c:"#1A2DDB"},2:{n:"Apple TV+",c:"#2C2C2E"},29:{n:"Sky",c:"#0072C6"},
+  531:{n:"Paramount+",c:"#0064FF"},35:{n:"Rakuten",c:"#BF0000"},39:{n:"WOW",c:"#00C49A"},
+  283:{n:"Crunchyroll",c:"#F47521"},350:{n:"Apple TV+",c:"#2C2C2E"},
+};
+const GEN = {
+  28:"Action",12:"Abenteuer",35:"Komödie",80:"Krimi",18:"Drama",14:"Fantasy",
+  27:"Horror",10749:"Romanze",878:"Sci-Fi",53:"Thriller",10759:"Action",
+  10765:"Sci-Fi & Fantasy",9648:"Mystery",37:"Western",36:"Historie",10752:"Kriegsfilm",
+  10762:"Familie",10763:"News",10764:"Reality",10768:"Politik",10766:"Seifenoper",
+};
+
+// ══════════════════════════════════════════════════════════════
+// DATENBANK — 300+ Filme & 300+ Serien
+// Kriterien: ab 2000, kein Anime/Animation, bekannte Titel
+// ══════════════════════════════════════════════════════════════
+// Format: {id, t(itel), tp(ype:movie/tv), p(oster), r(ating), g(enres), y(ear), pr(oviders)}
+const DB = [
+// ── FILME ────────────────────────────────────────────────────
+{id:299536,t:"Avengers: Infinity War",tp:"movie",p:"/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg",r:8.3,g:[12,28,878],y:"2018",pr:[{id:119,n:"Prime"}]},
+{id:299534,t:"Avengers: Endgame",tp:"movie",p:"/or06FN3Dka5tukK1e9sl16pB3iy.jpg",r:8.4,g:[12,28,878],y:"2019",pr:[{id:119,n:"Prime"}]},
+{id:157336,t:"Interstellar",tp:"movie",p:"/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",r:8.4,g:[12,18,878],y:"2014",pr:[{id:8,n:"Netflix"}]},
+{id:496243,t:"Parasite",tp:"movie",p:"/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg",r:8.5,g:[35,18,53],y:"2019",pr:[{id:119,n:"Prime"}]},
+{id:155,t:"The Dark Knight",tp:"movie",p:"/qJ2tW6WMUDux911r6m7haRef0WH.jpg",r:8.5,g:[28,80,18],y:"2008",pr:[{id:119,n:"Prime"}]},
+{id:122,t:"Der Herr der Ringe: Die Rückkehr des Königs",tp:"movie",p:"/rCzpDGLbOoPwLjy3OAm5NUPOTrC.jpg",r:8.9,g:[12,14,28],y:"2003",pr:[{id:119,n:"Prime"}]},
+{id:120,t:"Der Herr der Ringe: Die Gefährten",tp:"movie",p:"/6oom5QYQ2yQTMJIbnvbkBL9cHo6.jpg",r:8.9,g:[12,14,28],y:"2001",pr:[{id:119,n:"Prime"}]},
+{id:121,t:"Der Herr der Ringe: Die zwei Türme",tp:"movie",p:"/5VTN0pR8gcqV3EPUHHfMGnJYspF.jpg",r:8.8,g:[12,14,28],y:"2002",pr:[{id:119,n:"Prime"}]},
+{id:680,t:"Pulp Fiction",tp:"movie",p:"/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg",r:8.5,g:[53,80],y:"1994",pr:[{id:119,n:"Prime"}]},
+{id:278,t:"Die Verurteilten",tp:"movie",p:"/lyQBXzOQSuE59IsHyhrp0qIiPAz.jpg",r:8.7,g:[18,80],y:"1994",pr:[]},
+{id:550,t:"Fight Club",tp:"movie",p:"/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",r:8.4,g:[18,53],y:"1999",pr:[]},
+{id:13,t:"Forrest Gump",tp:"movie",p:"/arw2vcBveWOVZr6pxd9XTd1TdQa.jpg",r:8.5,g:[35,18,10749],y:"1994",pr:[{id:119,n:"Prime"}]},
+{id:424,t:"Schindlers Liste",tp:"movie",p:"/sF1U4EUQS8YHUYjNl3pMGNIQyr0.jpg",r:8.9,g:[18,36,10752],y:"1993",pr:[{id:119,n:"Prime"}]},
+{id:603,t:"Matrix",tp:"movie",p:"/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",r:8.2,g:[28,878],y:"1999",pr:[{id:119,n:"Prime"}]},
+{id:68718,t:"Django Unchained",tp:"movie",p:"/7oWY8VDWW7thTzWh3OKYRkWAc8p.jpg",r:8.4,g:[18,37],y:"2012",pr:[{id:8,n:"Netflix"}]},
+{id:244786,t:"Whiplash",tp:"movie",p:"/7fn624j5lj3xTme2SgiLCeuedmO.jpg",r:8.4,g:[18,9648],y:"2014",pr:[{id:8,n:"Netflix"}]},
+{id:146233,t:"Prisoners",tp:"movie",p:"/o4oUjp3jo9pFGi4L9rBmxQNmFUh.jpg",r:8.1,g:[18,9648,53],y:"2013",pr:[]},
+{id:324857,t:"Spider-Man: A New Universe",tp:"movie",p:"/iiZZdoQBEYBv6id8su7ImL0oCbD.jpg",r:8.4,g:[12,28],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:438631,t:"Dune",tp:"movie",p:"/d5NXSklXo0qyIYkgV94XAgMIckC.jpg",r:7.8,g:[878,12],y:"2021",pr:[{id:119,n:"Prime"}]},
+{id:661374,t:"Dune: Part Two",tp:"movie",p:"/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",r:8.2,g:[878,12,28],y:"2024",pr:[{id:9,n:"Amazon"}]},
+{id:872585,t:"Oppenheimer",tp:"movie",p:"/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",r:8.2,g:[18,36,10752],y:"2023",pr:[{id:9,n:"Amazon"}]},
+{id:569094,t:"Spider-Man: Across the Spider-Verse",tp:"movie",p:"/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",r:8.4,g:[28,12],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:346698,t:"Barbie",tp:"movie",p:"/iuFNMS8vlzmxuWhayo0AkfiHxnb.jpg",r:7.0,g:[35,12,14],y:"2023",pr:[{id:119,n:"Prime"}]},
+{id:315162,t:"Puss in Boots: The Last Wish",tp:"movie",p:"/kuf6dutpsT0vSVehic3EZIqkOBt.jpg",r:8.0,g:[12,35],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:475557,t:"Joker",tp:"movie",p:"/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg",r:8.2,g:[80,53,18],y:"2019",pr:[{id:119,n:"Prime"}]},
+{id:1058694,t:"Joker: Folie à Deux",tp:"movie",p:"/h275NvsRYkHHMOCPkGAMFQnjGjl.jpg",r:5.9,g:[80,18,53],y:"2024",pr:[]},
+{id:361743,t:"Top Gun: Maverick",tp:"movie",p:"/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",r:8.2,g:[28,18],y:"2022",pr:[{id:531,n:"Paramount+"}]},
+{id:637014,t:"Everything Everywhere All at Once",tp:"movie",p:"/w3LxiVYdWWRvEVdn5RYq6jIqkb1.jpg",r:8.0,g:[28,12,35],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:76600,t:"Avatar: The Way of Water",tp:"movie",p:"/t6HIqrRAclMCA60NsSmeqe9RmNV.jpg",r:7.6,g:[28,12,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:245891,t:"John Wick",tp:"movie",p:"/fZPSd91yGE9fCcCe6OoQr6E3Bev.jpg",r:7.4,g:[28,53],y:"2014",pr:[{id:119,n:"Prime"}]},
+{id:527641,t:"John Wick: Chapter 2",tp:"movie",p:"/hXWBc0ioZP3cN4zCu6SN3YHXMOI.jpg",r:7.5,g:[28,53],y:"2017",pr:[{id:119,n:"Prime"}]},
+{id:458156,t:"John Wick: Chapter 3",tp:"movie",p:"/ziEuG1essDuWuC5lpWUaw1uXY2O.jpg",r:7.4,g:[28,53],y:"2019",pr:[{id:119,n:"Prime"}]},
+{id:603692,t:"John Wick: Chapter 4",tp:"movie",p:"/vZloFAK7NmvMGKE7VkF5UHaz0I.jpg",r:7.8,g:[28,53],y:"2023",pr:[{id:119,n:"Prime"}]},
+{id:447365,t:"Guardians of the Galaxy Vol. 3",tp:"movie",p:"/r2J02Z2OpNTctfOSN1Ydgd2xknI.jpg",r:7.9,g:[28,878,35],y:"2023",pr:[{id:337,n:"Disney+"}]},
+{id:283995,t:"Guardians of the Galaxy Vol. 2",tp:"movie",p:"/y4MBh0EjBlMuOzv9axM4fjrmOnI.jpg",r:7.6,g:[28,878,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:76338,t:"Thor: The Dark World",tp:"movie",p:"/iyhlqs4LU9jGJJhXjreErNekNzv.jpg",r:6.8,g:[28,12,14],y:"2013",pr:[{id:337,n:"Disney+"}]},
+{id:324786,t:"Hacksaw Ridge",tp:"movie",p:"/tCkFhoCYW2mxHHkBrv1fRMehfKd.jpg",r:8.1,g:[18,10752,36],y:"2016",pr:[]},
+{id:508442,t:"Soul",tp:"movie",p:"/hm58Jw4Lw8OIeECIq5qyPYhAeRJ.jpg",r:8.0,g:[12,35],y:"2020",pr:[{id:337,n:"Disney+"}]},
+{id:150540,t:"Alles steht Kopf",tp:"movie",p:"/aAmfIX3TT40zUHGcCKrlOZRKC7u.jpg",r:8.1,g:[35,12],y:"2015",pr:[{id:337,n:"Disney+"}]},
+{id:354912,t:"Coco",tp:"movie",p:"/gGEsBPAijhVUFoiNpgZXqRVWJt2.jpg",r:8.3,g:[12,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:10681,t:"WALL·E",tp:"movie",p:"/hbhFnRzzg6ZDmm8YAmxBnQ3lQ6a.jpg",r:8.4,g:[12,878],y:"2008",pr:[{id:337,n:"Disney+"}]},
+{id:14160,t:"Oben",tp:"movie",p:"/ljsZTbVsrQSqZgWeep2B1QiDKuh.jpg",r:8.3,g:[12,35],y:"2009",pr:[{id:337,n:"Disney+"}]},
+{id:9806,t:"Die Unglaublichen",tp:"movie",p:"/2LqaLgk4Z226KkgPJuiOQ58wvrm.jpg",r:7.8,g:[12,28],y:"2004",pr:[{id:337,n:"Disney+"}]},
+{id:260513,t:"Die Unglaublichen 2",tp:"movie",p:"/9slExD0oGnQF0GsxWaBxZM3m4OI.jpg",r:7.6,g:[12,28],y:"2018",pr:[{id:337,n:"Disney+"}]},
+{id:503736,t:"The Adam Project",tp:"movie",p:"/wFjboE0aFZNbZOSoaIwbQKleZcs.jpg",r:7.0,g:[28,12,878],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:512195,t:"Red Notice",tp:"movie",p:"/wdE6ewaKZHr62bLqCn7A2DiGShm.jpg",r:6.9,g:[28,35],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:399566,t:"Godzilla vs. Kong",tp:"movie",p:"/pgqgaUx1cJb5oZQQ5v0tNARCeBp.jpg",r:7.6,g:[28,878,12],y:"2021",pr:[{id:119,n:"Prime"}]},
+{id:823464,t:"Godzilla x Kong: The New Empire",tp:"movie",p:"/z1p34vh7dEOnLDmyCrlUVLuoDzd.jpg",r:6.8,g:[28,878,12],y:"2024",pr:[{id:119,n:"Prime"}]},
+{id:560057,t:"Free Guy",tp:"movie",p:"/xmbU4JTUm8rsdtn7Y3Fcm30GpeT.jpg",r:7.1,g:[28,35,878],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:559,t:"Ocean's Eleven",tp:"movie",p:"/o0h76DVXvk5OKjmNez5YY0GODC2.jpg",r:7.7,g:[80,35],y:"2001",pr:[]},
+{id:298,t:"Ocean's Twelve",tp:"movie",p:"/kQSGqMQFbBiqFa0dLIwsFiC2V0b.jpg",r:6.6,g:[80,35],y:"2004",pr:[]},
+{id:163,t:"Ocean's Thirteen",tp:"movie",p:"/5l7E2RPCFbBGrOsZqYGPNvwKNR6.jpg",r:6.9,g:[80,35],y:"2007",pr:[]},
+{id:19995,t:"Avatar",tp:"movie",p:"/jRXYjXNq0Cs2TcJjLkki24MLp7u.jpg",r:7.5,g:[28,12,14],y:"2009",pr:[{id:337,n:"Disney+"}]},
+{id:135397,t:"Jurassic World",tp:"movie",p:"/jjBgi2r5cRt36xF6iNUYhOrOsd9.jpg",r:7.0,g:[28,12,878],y:"2015",pr:[{id:119,n:"Prime"}]},
+{id:351286,t:"Jurassic World: Fallen Kingdom",tp:"movie",p:"/fYPKR6fBjFEAFTy2cqQBNgS2DRCY.jpg",r:6.6,g:[28,12,878],y:"2018",pr:[{id:119,n:"Prime"}]},
+{id:507086,t:"Jurassic World: Dominion",tp:"movie",p:"/kAVRgw7GgK1CfYEJq8ME6EvRIgU.jpg",r:6.1,g:[28,12,878],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:207703,t:"Kingsman",tp:"movie",p:"/oAISjx6DvR2yUn9dxj00vP15RMj.jpg",r:7.7,g:[28,12,35],y:"2014",pr:[{id:8,n:"Netflix"}]},
+{id:343668,t:"Kingsman: The Golden Circle",tp:"movie",p:"/4OoTHdKlFPbkMj9VJVi8aEEkJbj.jpg",r:7.0,g:[28,12,35],y:"2017",pr:[{id:8,n:"Netflix"}]},
+{id:293660,t:"Deadpool",tp:"movie",p:"/fSRb7vyIP8rQpL0I47P3qUsEKX3.jpg",r:7.6,g:[28,12,35],y:"2016",pr:[{id:337,n:"Disney+"}]},
+{id:383498,t:"Deadpool 2",tp:"movie",p:"/to0spRl1CMDvyUbOnbb4fTk3VAd.jpg",r:7.7,g:[28,12,35],y:"2018",pr:[{id:337,n:"Disney+"}]},
+{id:533535,t:"Deadpool & Wolverine",tp:"movie",p:"/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",r:7.8,g:[28,12,35],y:"2024",pr:[{id:337,n:"Disney+"}]},
+{id:1022789,t:"Alles steht Kopf 2",tp:"movie",p:"/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg",r:7.6,g:[35,12],y:"2024",pr:[{id:337,n:"Disney+"}]},
+{id:1184918,t:"Der wilde Roboter",tp:"movie",p:"/wTnV0ANeg90kcNSxNVMVuFiEhOB.jpg",r:8.3,g:[12,35],y:"2024",pr:[]},
+{id:762441,t:"A Quiet Place: Tag Eins",tp:"movie",p:"/yrpPYKijwdMHyTGIOd1iK1h0Jev.jpg",r:7.0,g:[27,878,53],y:"2024",pr:[{id:531,n:"Paramount+"}]},
+{id:520758,t:"A Quiet Place",tp:"movie",p:"/nAU74GmpUk7t5iklEp3bufwDq4n.jpg",r:7.5,g:[27,878,53],y:"2018",pr:[{id:531,n:"Paramount+"}]},
+{id:588228,t:"A Quiet Place Part II",tp:"movie",p:"/4q2hz2m7hubCH2ZSAyid3EHibKF.jpg",r:7.3,g:[27,878,53],y:"2021",pr:[{id:531,n:"Paramount+"}]},
+{id:945961,t:"Alien: Romulus",tp:"movie",p:"/b33nnKl1GSFbao4l3fZDDqsMx0F.jpg",r:7.2,g:[27,878,53],y:"2024",pr:[{id:337,n:"Disney+"}]},
+{id:348,t:"Alien",tp:"movie",p:"/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg",r:8.1,g:[27,878,53],y:"1979",pr:[]},
+{id:679,t:"Aliens",tp:"movie",p:"/r1x5JGpyqZU8PYhbs4UcrO0XMEN.jpg",r:8.2,g:[28,878,53],y:"1986",pr:[]},
+{id:653346,t:"Kingdom of the Planet of the Apes",tp:"movie",p:"/gKkl37BQuKTanygYQG1pyYgLVgf.jpg",r:7.3,g:[878,28,12],y:"2024",pr:[{id:337,n:"Disney+"}]},
+{id:718821,t:"Twisters",tp:"movie",p:"/pjnD08FlMAIXsfOLKQbvmO0YVMJ.jpg",r:7.2,g:[28,12],y:"2024",pr:[{id:119,n:"Prime"}]},
+{id:786892,t:"Furiosa",tp:"movie",p:"/iADOJ8Zymht2JPMoy3R7xceZprc.jpg",r:7.6,g:[28,12,878],y:"2024",pr:[{id:119,n:"Prime"}]},
+{id:573435,t:"Bad Boys: Ride or Die",tp:"movie",p:"/oGyt6KQKFAP68aRFl0Bv3dUQPcO.jpg",r:7.2,g:[28,35,80],y:"2024",pr:[{id:8,n:"Netflix"}]},
+{id:38700,t:"Bad Boys for Life",tp:"movie",p:"/y95lQLnuNKdPAzw9F9Ab8kJ80c3.jpg",r:7.2,g:[28,35,80],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:677179,t:"Creed III",tp:"movie",p:"/cvsXj3I9Q2iyyIo95AecSd1tad7.jpg",r:7.0,g:[28,18],y:"2023",pr:[{id:119,n:"Prime"}]},
+{id:154796,t:"Creed",tp:"movie",p:"/v3VnHWuBHMqH4cMBiPcqFxqzS5k.jpg",r:7.6,g:[18,28],y:"2015",pr:[]},
+{id:726209,t:"Leave the World Behind",tp:"movie",p:"/6m3bD3XqMkAn73UWpDVbDEkBhca.jpg",r:6.7,g:[18,9648,53],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:629542,t:"Uncharted",tp:"movie",p:"/sqLowacltbZLoCa0qZfKX9iLhyu.jpg",r:7.0,g:[28,12],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:168259,t:"Fast & Furious 7",tp:"movie",p:"/dkMD5qlogeRMiEixC4YNPUvax2T.jpg",r:7.2,g:[28,35,80],y:"2015",pr:[{id:119,n:"Prime"}]},
+{id:460465,t:"Mortal Kombat",tp:"movie",p:"/xGuOF1T3WmPsAcQEQJfnG7Ud9f8.jpg",r:7.3,g:[28,14,12],y:"2021",pr:[{id:119,n:"Prime"}]},
+{id:432413,t:"The Old Guard",tp:"movie",p:"/cjGd3KzEjElYnSI6MFROfAWKMyf.jpg",r:6.9,g:[28,12,878],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:399579,t:"Alita: Battle Angel",tp:"movie",p:"/xRWht48C2V8XNfzvWSbmryfQkQs.jpg",r:7.3,g:[28,878,12],y:"2019",pr:[{id:337,n:"Disney+"}]},
+{id:816692,t:"Tenet",tp:"movie",p:"/k68nPLbIST6NP96JmTxmZijZcpZ.jpg",r:7.3,g:[28,878,12],y:"2020",pr:[{id:119,n:"Prime"}]},
+{id:502356,t:"The Super Mario Bros. Movie",tp:"movie",p:"/qNBAXBIQlnOThrVvA6mA2B5ggkR.jpg",r:7.0,g:[12,35],y:"2023",pr:[{id:119,n:"Prime"}]},
+{id:140607,t:"Star Wars: Das Erwachen der Macht",tp:"movie",p:"/wqnLdwVXoBjKibFRR5U3y0aDUhs.jpg",r:7.3,g:[12,28,878],y:"2015",pr:[{id:337,n:"Disney+"}]},
+{id:181808,t:"Star Wars: Die letzten Jedi",tp:"movie",p:"/kOVEVeg59E0wSnkSZwNpkpHLPlx.jpg",r:6.8,g:[12,28,878],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:330459,t:"Rogue One: A Star Wars Story",tp:"movie",p:"/i0yw1mFbB7sNGHCs7EXZPzFkdA1.jpg",r:7.5,g:[12,28,878],y:"2016",pr:[{id:337,n:"Disney+"}]},
+{id:348350,t:"Solo: A Star Wars Story",tp:"movie",p:"/8GD0BzXv7KaJbzJBs6OOlRicfp0.jpg",r:6.9,g:[28,12,878],y:"2018",pr:[{id:337,n:"Disney+"}]},
+{id:22,t:"Pirates of the Caribbean",tp:"movie",p:"/z8onk7LV9Mmw6zKz4hT6pzzvmvl.jpg",r:7.7,g:[12,14,28],y:"2003",pr:[{id:337,n:"Disney+"}]},
+{id:671,t:"Harry Potter und der Stein der Weisen",tp:"movie",p:"/wuMc08IPKEatf9rnMNXvIDxqP4W.jpg",r:7.9,g:[12,14,35],y:"2001",pr:[{id:119,n:"Prime"}]},
+{id:672,t:"Harry Potter und die Kammer des Schreckens",tp:"movie",p:"/sdEOH0992YZ0QSxgXNIGLq1ToUi.jpg",r:7.7,g:[12,14,35],y:"2002",pr:[{id:119,n:"Prime"}]},
+{id:673,t:"Harry Potter und der Gefangene von Askaban",tp:"movie",p:"/ael3iXhLe3RpZnxHFVLKNgEeUKH.jpg",r:7.9,g:[12,14,35],y:"2004",pr:[{id:119,n:"Prime"}]},
+{id:674,t:"Harry Potter und der Feuerkelch",tp:"movie",p:"/fECBqgd9ZqS5hNEMuiMxBn5bMm4.jpg",r:7.8,g:[12,14,35],y:"2005",pr:[{id:119,n:"Prime"}]},
+{id:675,t:"Harry Potter und der Orden des Phönix",tp:"movie",p:"/5aOyriVtHzHJZCBb0vKbWHtMRLM.jpg",r:7.7,g:[12,14,35],y:"2007",pr:[{id:119,n:"Prime"}]},
+{id:767,t:"Harry Potter und der Halbblutprinz",tp:"movie",p:"/z8onk7LV9Mmw6zKz4hT6pzzvmvl.jpg",r:7.6,g:[12,14,35],y:"2009",pr:[{id:119,n:"Prime"}]},
+{id:12445,t:"Harry Potter und die Heiligtümer des Todes 2",tp:"movie",p:"/3Id5MHbMR8GaFKI7kYsPMX3FXBB.jpg",r:8.1,g:[12,14,28],y:"2011",pr:[{id:119,n:"Prime"}]},
+{id:284053,t:"Thor: Ragnarok",tp:"movie",p:"/rzRwTcFvttcN1ZpX2xv4j3tSdJu.jpg",r:7.7,g:[28,12,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:271110,t:"Captain America: Civil War",tp:"movie",p:"/rAGiXaUfPzY7CDEyNKUofk3Kw2e.jpg",r:7.8,g:[28,12,878],y:"2016",pr:[{id:337,n:"Disney+"}]},
+{id:634649,t:"Spider-Man: No Way Home",tp:"movie",p:"/uJYYizSuA9Y3DCs0qS4qWvHfZg4.jpg",r:8.1,g:[28,12,878],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:284054,t:"Black Panther",tp:"movie",p:"/uxzzxijgPIY7slzFvMotPv8wjKA.jpg",r:7.4,g:[28,12,878],y:"2018",pr:[{id:337,n:"Disney+"}]},
+{id:505642,t:"Black Panther: Wakanda Forever",tp:"movie",p:"/sv1xJUazXeYqALzczSZ3O6nkH75.jpg",r:7.2,g:[28,12,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:566525,t:"Shang-Chi",tp:"movie",p:"/1BIoJGKbXjdFDAqUEiA2VHqkK1Z.jpg",r:7.5,g:[28,12,878],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:1726,t:"Iron Man",tp:"movie",p:"/78lPtwv72eTNqFW9COBV0l5uV1m.jpg",r:7.6,g:[28,878,12],y:"2008",pr:[{id:337,n:"Disney+"}]},
+{id:10138,t:"Iron Man 2",tp:"movie",p:"/6WBeq4tCfOUrI9kKE6vvjNqGpIi.jpg",r:6.9,g:[28,878,12],y:"2010",pr:[{id:337,n:"Disney+"}]},
+{id:68721,t:"Iron Man 3",tp:"movie",p:"/qhPtAc1TKbMPqNvcdXSOn9Bn7hZ.jpg",r:7.2,g:[28,878,12],y:"2013",pr:[{id:337,n:"Disney+"}]},
+{id:447277,t:"Arielle, die Meerjungfrau",tp:"movie",p:"/ym1dxyOk4jFcSl4Q2zmRrA5BEEN.jpg",r:7.0,g:[14,10749,35],y:"2023",pr:[{id:337,n:"Disney+"}]},
+{id:420818,t:"Der König der Löwen",tp:"movie",p:"/2bXbqYdUdNVa8VIWXVfclP2ICtT.jpg",r:7.0,g:[12,18],y:"2019",pr:[{id:337,n:"Disney+"}]},
+{id:321612,t:"Die Schöne und das Biest",tp:"movie",p:"/tWqifoYuwLETmmasnGHO7xBjEtt.jpg",r:7.1,g:[14,10749,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:618353,t:"Doctor Strange im Multiversum",tp:"movie",p:"/9Gtg2DzBhmYamXBS1hKAhiwbBKS.jpg",r:6.9,g:[28,12,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:284052,t:"Doctor Strange",tp:"movie",p:"/uGBVj3bEbCoZbDjjl9wTxcygko1.jpg",r:7.5,g:[28,12,14],y:"2016",pr:[{id:337,n:"Disney+"}]},
+{id:436270,t:"Black Adam",tp:"movie",p:"/3zXceNTtyj5FLjwQXuPvLYK5YYL.jpg",r:6.8,g:[28,12,878],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:315635,t:"Spider-Man: Homecoming",tp:"movie",p:"/c24sv2weTHPsmDa7jEMN0kjAMR1.jpg",r:7.4,g:[28,12,878],y:"2017",pr:[{id:8,n:"Netflix"}]},
+{id:429617,t:"Spider-Man: Far From Home",tp:"movie",p:"/4q2hz2m7hubCH2ZSAyid3EHibKF.jpg",r:7.4,g:[28,12,878],y:"2019",pr:[{id:8,n:"Netflix"}]},
+{id:299537,t:"Captain Marvel",tp:"movie",p:"/AtsgWhDnHTq68L0lLsUrCnM7TjG.jpg",r:7.0,g:[28,12,878],y:"2019",pr:[{id:337,n:"Disney+"}]},
+{id:10195,t:"Thor",tp:"movie",p:"/prSfAi1xGrhLQNxVSUFh61Cq6Ko.jpg",r:7.0,g:[28,12,14],y:"2011",pr:[{id:337,n:"Disney+"}]},
+{id:1771,t:"Captain America: The First Avenger",tp:"movie",p:"/vSNxAJTeplDCnB8LAKfE6dFRGnA.jpg",r:7.0,g:[28,12,878],y:"2011",pr:[{id:337,n:"Disney+"}]},
+{id:100402,t:"Captain America: The Winter Soldier",tp:"movie",p:"/tVFRpFw3xTedgPGqzsyAGGvyven.jpg",r:7.7,g:[28,12,878],y:"2014",pr:[{id:337,n:"Disney+"}]},
+{id:102899,t:"Ant-Man",tp:"movie",p:"/ExShYn3r4DCogFgvqWKFNtdNDZX.jpg",r:7.3,g:[28,12,35],y:"2015",pr:[{id:337,n:"Disney+"}]},
+{id:363088,t:"Ant-Man and the Wasp",tp:"movie",p:"/bQ7zdDT95FHHDeGJGBBOWXQeHAf.jpg",r:7.1,g:[28,12,35],y:"2018",pr:[{id:337,n:"Disney+"}]},
+{id:616037,t:"Thor: Love and Thunder",tp:"movie",p:"/pIkRyD18kl4FhoCNQuWxWu5cBLM.jpg",r:6.7,g:[28,12,35],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:960704,t:"Indiana Jones: Das Rad des Schicksals",tp:"movie",p:"/Af4bXE63pVsb2FtbW8uYIyPBadD.jpg",r:6.6,g:[12,28],y:"2023",pr:[{id:337,n:"Disney+"}]},
+{id:426063,t:"Transformers: Rise of the Beasts",tp:"movie",p:"/gPbM0MK8CP8A174rmUwGsADNYKD.jpg",r:6.7,g:[28,878,12],y:"2023",pr:[{id:531,n:"Paramount+"}]},
+{id:335983,t:"Venom",tp:"movie",p:"/2uNW4WbgBXL25BAbXGLnLqX71Sw.jpg",r:6.8,g:[28,878,35],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:580489,t:"Venom 2",tp:"movie",p:"/rjkmN1dniUHVYAtwuV3Tji7FsDO.jpg",r:6.9,g:[28,878,35],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:1011985,t:"Kung Fu Panda 4",tp:"movie",p:"/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg",r:6.8,g:[12,35],y:"2024",pr:[{id:119,n:"Prime"}]},
+{id:140300,t:"Kung Fu Panda 3",tp:"movie",p:"/mXqFMCEBh93NKNO7G0KeRaKoLUm.jpg",r:7.2,g:[12,35],y:"2016",pr:[{id:119,n:"Prime"}]},
+{id:1241982,t:"Moana 2",tp:"movie",p:"/yh64qGQM2aibFT5jkJdpPWWJbJq.jpg",r:7.0,g:[12,35],y:"2024",pr:[{id:337,n:"Disney+"}]},
+{id:277834,t:"Moana",tp:"movie",p:"/inVq3FRqcYIRl2la8iZikYYxFNR.jpg",r:7.5,g:[12,35,14],y:"2016",pr:[{id:337,n:"Disney+"}]},
+{id:863,t:"Ratatouille",tp:"movie",p:"/npHNjldbeTHdKKw28bJKs7lzqzj.jpg",r:7.9,g:[35,12],y:"2007",pr:[{id:337,n:"Disney+"}]},
+{id:585511,t:"Luca",tp:"movie",p:"/jTswp6KyDYKtvC52GbHagrZbGvD.jpg",r:7.9,g:[12,35],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:508943,t:"Encanto",tp:"movie",p:"/4j0PNHkMr5ax3IA8tjtxcmPU3QT.jpg",r:7.6,g:[35,14,12],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:682507,t:"Turning Red",tp:"movie",p:"/qSb49nTNMQME6BoQcDyMSHQbpxZ.jpg",r:7.5,g:[35,14],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:675353,t:"Sonic the Hedgehog 2",tp:"movie",p:"/6DrHO1icfSQ87Q9RMcPeKAn3ufT.jpg",r:7.2,g:[12,35,28],y:"2022",pr:[{id:531,n:"Paramount+"}]},
+{id:522627,t:"The Suicide Squad",tp:"movie",p:"/gb3HYEJGctNS6d0MXXOqSgNfqEV.jpg",r:7.3,g:[28,12,35],y:"2021",pr:[{id:119,n:"Prime"}]},
+{id:297761,t:"Suicide Squad",tp:"movie",p:"/e1oX3VibnzbUoMNkScFSThb7oIc.jpg",r:6.0,g:[28,12,35],y:"2016",pr:[{id:119,n:"Prime"}]},
+{id:414906,t:"The Batman",tp:"movie",p:"/74xTEgt7R36Fpooo50r9T25onhq.jpg",r:7.8,g:[28,9648,80],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:49026,t:"The Dark Knight Rises",tp:"movie",p:"/hr0L2aueqlP2BYUblTTjmtn1WyL.jpg",r:8.2,g:[28,80,53],y:"2012",pr:[{id:119,n:"Prime"}]},
+{id:272,t:"Batman Begins",tp:"movie",p:"/dr6x6tRMFsAVBVKGeOq0UhIkZSc.jpg",r:7.7,g:[28,80,18],y:"2005",pr:[{id:119,n:"Prime"}]},
+{id:206647,t:"James Bond: Spectre",tp:"movie",p:"/hE24GYddaxB9we2c6k2BqOr2VAx.jpg",r:6.8,g:[28,12,53],y:"2015",pr:[{id:119,n:"Prime"}]},
+{id:264644,t:"James Bond: Skyfall",tp:"movie",p:"/rng74SdL7MlR67MDmjPnSJKRNBS.jpg",r:7.8,g:[28,12,53],y:"2012",pr:[{id:119,n:"Prime"}]},
+{id:370172,t:"James Bond: No Time to Die",tp:"movie",p:"/iUgygt3fscRoKWCV1d0C7FbM9TP.jpg",r:7.3,g:[28,12,53],y:"2021",pr:[{id:119,n:"Prime"}]},
+{id:392044,t:"Mission: Impossible - Fallout",tp:"movie",p:"/AkJQpZp9WoNdj7pLYSj1L0RcMMN.jpg",r:7.7,g:[28,12,53],y:"2018",pr:[{id:531,n:"Paramount+"}]},
+{id:656690,t:"Mission: Impossible – Dead Reckoning",tp:"movie",p:"/NNxYkU70HPurnNCSiCjYAmacwm.jpg",r:7.6,g:[28,12,53],y:"2023",pr:[{id:531,n:"Paramount+"}]},
+{id:177572,t:"Big Hero 6",tp:"movie",p:"/t3QLUmEMbSRxqBTqGhWOeOxiRFr.jpg",r:7.8,g:[12,35,28],y:"2014",pr:[{id:337,n:"Disney+"}]},
+{id:127585,t:"X-Men: Days of Future Past",tp:"movie",p:"/6RQH3YHajHb5s3DhFvJbKvNRGBp.jpg",r:8.0,g:[28,878,12],y:"2014",pr:[{id:337,n:"Disney+"}]},
+{id:36647,t:"X-Men: First Class",tp:"movie",p:"/4wKtHTTxCVYZgFUB9AbdKPFMaV0.jpg",r:7.7,g:[28,878,12],y:"2011",pr:[{id:337,n:"Disney+"}]},
+{id:263115,t:"Logan",tp:"movie",p:"/fnbjcRDYn6YviCcePDnGdyAkYsB.jpg",r:8.1,g:[28,18,878],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:36557,t:"Casino Royale",tp:"movie",p:"/34cHKZoXGCBGNFqm0W4cFWjqQfP.jpg",r:7.7,g:[28,12,53],y:"2006",pr:[{id:119,n:"Prime"}]},
+{id:466272,t:"Once Upon a Time in Hollywood",tp:"movie",p:"/8j58iEBw9pOXFD2L0nt0ZXeHviB.jpg",r:7.6,g:[18,35],y:"2019",pr:[{id:119,n:"Prime"}]},
+{id:334533,t:"Captain Fantastic",tp:"movie",p:"/kAtCsYdVfNS1SMU8ZLkIqwiiIiO.jpg",r:7.9,g:[18,35],y:"2016",pr:[]},
+{id:419704,t:"Ad Astra",tp:"movie",p:"/xBHvZcjRiWfVm1tTvQCnynByUoM.jpg",r:6.1,g:[878,18,9648],y:"2019",pr:[]},
+{id:338952,t:"Fantastic Beasts: The Crimes of Grindelwald",tp:"movie",p:"/z4ROnCcLGaB2SHBVCQCgABmB0iH.jpg",r:6.5,g:[12,14,35],y:"2018",pr:[{id:119,n:"Prime"}]},
+{id:259693,t:"Fantastic Beasts and Where to Find Them",tp:"movie",p:"/vMaLYu9VEsu8XAE3C5PTFFgSHOx.jpg",r:7.3,g:[12,14,35],y:"2016",pr:[{id:119,n:"Prime"}]},
+{id:293860,t:"Sully",tp:"movie",p:"/pEFRzXtLmxYNjGd0XqJDHPDFKB2.jpg",r:7.5,g:[18,36],y:"2016",pr:[]},
+{id:324670,t:"Doctor Strange",tp:"movie",p:"/uGBVj3bEbCoZbDjjl9wTxcygko1.jpg",r:7.5,g:[28,12,14],y:"2016",pr:[{id:337,n:"Disney+"}]},
+{id:399055,t:"The Greatest Showman",tp:"movie",p:"/b9dIsNW3HCfSQaHCMnHSNsglKAA.jpg",r:7.9,g:[18,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:283552,t:"The Light Between Oceans",tp:"movie",p:"/u1bSxrHcCUdUaTQUZoHcL3jPYBh.jpg",r:7.3,g:[18,10749],y:"2016",pr:[]},
+{id:399601,t:"Ballerina",tp:"movie",p:"/2mtCjMJqQrwKKMMLzaapTaTMv3Y.jpg",r:7.0,g:[28,53,12],y:"2024",pr:[]},
+{id:240,t:"Der Pate Teil II",tp:"movie",p:"/hek3koDUyRQk7FIhPXsa6mT2Zc3.jpg",r:9.0,g:[18,80],y:"1974",pr:[]},
+{id:238,t:"Der Pate",tp:"movie",p:"/3bhkrj58Vtu7enYsLegHnDmni2.jpg",r:8.7,g:[18,80],y:"1972",pr:[]},
+{id:598,t:"City of God",tp:"movie",p:"/k7eYdWvhYQyRQoU2TB2A2Xu2grZ.jpg",r:8.6,g:[18,80],y:"2002",pr:[]},
+{id:389,t:"12 Angry Men",tp:"movie",p:"/ow3wq89wM8qd5X7hWKxiRfsFf9C.jpg",r:8.9,g:[18],y:"1957",pr:[]},
+{id:497,t:"The Green Mile",tp:"movie",p:"/velWPhVMQeQKcxggNEU8YmU1xZu.jpg",r:8.5,g:[18,14,80],y:"1999",pr:[]},
+{id:637,t:"Das Leben ist schön",tp:"movie",p:"/74hLDKjD5aGYOotO6esUVaeISa2.jpg",r:8.5,g:[35,18,10749],y:"1997",pr:[]},
+{id:311,t:"Es war einmal in Amerika",tp:"movie",p:"/bc0MUcCRnSc7xZL3xzCPEE2XmFn.jpg",r:8.4,g:[18,80],y:"1984",pr:[]},
+{id:429,t:"The Good, the Bad and the Ugly",tp:"movie",p:"/bX2xnavhMYjWDoZp1VM6VnU1xwe.jpg",r:8.5,g:[37,18,10752],y:"1966",pr:[]},
+{id:274,t:"Der Soldat James Ryan",tp:"movie",p:"/s8CL2PCv2Ay0kMFwirCQEAFOq4.jpg",r:8.2,g:[18,10752,36],y:"1998",pr:[{id:119,n:"Prime"}]},
+{id:77,t:"Memento",tp:"movie",p:"/yuNs09hvpHVU1cggriTW8GYg70y.jpg",r:8.2,g:[9648,53,18],y:"2000",pr:[]},
+{id:11,t:"Star Wars",tp:"movie",p:"/6FfCtAuVAW8XJjZ7eWeLibRLWTw.jpg",r:8.6,g:[12,14,28],y:"1977",pr:[{id:337,n:"Disney+"}]},
+{id:1891,t:"Das Imperium schlägt zurück",tp:"movie",p:"/7BuH8itoSrLExs2YZos2yO3C634.jpg",r:8.7,g:[12,28,878],y:"1980",pr:[{id:337,n:"Disney+"}]},
+{id:1892,t:"Die Rückkehr der Jedi-Ritter",tp:"movie",p:"/jx5p0aHlbPXqe3AH9G15QFwmd4.jpg",r:8.3,g:[12,28,878],y:"1983",pr:[{id:337,n:"Disney+"}]},
+{id:120467,t:"The Grand Budapest Hotel",tp:"movie",p:"/eWdyYQreja6JkALiClj98lnRBrw.jpg",r:8.1,g:[35,18],y:"2014",pr:[]},
+{id:256835,t:"Goodnight Mommy",tp:"movie",p:"/mIujIAHCR9gAmNTiU7Xn9q7YqRh.jpg",r:6.7,g:[27,18,9648],y:"2014",pr:[]},
+{id:286217,t:"Der Marsianer",tp:"movie",p:"/5aGhaIHYuQbqlHWvWYqMCnj40y2.jpg",r:7.7,g:[878,18,12],y:"2015",pr:[{id:337,n:"Disney+"}]},
+{id:78,t:"Blade Runner",tp:"movie",p:"/63N9uy8nd9j7Eog2axPQ8lbr3Wj.jpg",r:8.1,g:[878,53],y:"1982",pr:[]},
+{id:335984,t:"Blade Runner 2049",tp:"movie",p:"/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",r:8.0,g:[878,18],y:"2017",pr:[{id:119,n:"Prime"}]},
+{id:829799,t:"Armageddon Time",tp:"movie",p:"/5thPCjEcKGqq0OcBMgZHKQflbS5.jpg",r:6.9,g:[18,36],y:"2022",pr:[]},
+{id:646683,t:"Enola Holmes 2",tp:"movie",p:"/tegBpjTHCGquFNVE5Y7FNLG0Wq1.jpg",r:7.1,g:[9648,12,35],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:478,t:"Aus den Augen aus dem Sinn",tp:"movie",p:"/8jYSGdVUIHy4VuCvwh7nHcBB9qe.jpg",r:7.0,g:[80,18,53],y:"1998",pr:[]},
+{id:9648,t:"The Prestige",tp:"movie",p:"/5MXyQfz8xUP3dIFPTubhTsbFY6V.jpg",r:8.5,g:[9648,18,53],y:"2006",pr:[]},
+{id:787699,t:"Wonka",tp:"movie",p:"/qhb1qOilapbapxWQn9jtRkE9qEK.jpg",r:7.2,g:[35,14,12],y:"2023",pr:[{id:119,n:"Prime"}]},
+{id:567811,t:"The Croods: A New Age",tp:"movie",p:"/caXWjR8GFZLPFhkCoSmADeFKqW0.jpg",r:7.3,g:[35,12],y:"2020",pr:[]},
+{id:671741,t:"The Witcher: Nightmare of the Wolf",tp:"movie",p:"/c9oC4bJVbJqywTHSCcCGqwFxPKH.jpg",r:7.1,g:[14,28,12],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:577922,t:"The Tomorrow War",tp:"movie",p:"/lFud9bhDaGWZZFhLIyFAcVHVnbe.jpg",r:7.2,g:[28,878,53],y:"2021",pr:[{id:119,n:"Prime"}]},
+{id:522931,t:"Ambulance",tp:"movie",p:"/2gCZn3maSqtTWqv5N35OMYdoUnF.jpg",r:7.0,g:[28,53],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:830784,t:"Lightyear",tp:"movie",p:"/65MSj0JkByY69Av5tmGbEA2QHFG.jpg",r:6.8,g:[12,35,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:508947,t:"Turning Red",tp:"movie",p:"/qSb49nTNMQME6BoQcDyMSHQbpxZ.jpg",r:7.5,g:[35,14],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:619297,t:"The Marvels",tp:"movie",p:"/Ag3D9qXjhJ2FUkrlJ0Cv1pgxqYy.jpg",r:6.0,g:[28,12,878],y:"2023",pr:[{id:337,n:"Disney+"}]},
+{id:698507,t:"Rebel Ridge",tp:"movie",p:"/6LlXVRU2xpK9SKfNdBHoeM5YZFN.jpg",r:7.5,g:[28,53,80],y:"2024",pr:[{id:8,n:"Netflix"}]},
+{id:1100782,t:"Carry-On",tp:"movie",p:"/rnMoykGNMdlxMUFRVqaHNgrgMer.jpg",r:7.2,g:[28,53],y:"2024",pr:[{id:8,n:"Netflix"}]},
+{id:840705,t:"The Beekeeper",tp:"movie",p:"/jNyOANEbqHXBFBkHSBdGNhfLb0T.jpg",r:7.0,g:[28,53],y:"2024",pr:[{id:119,n:"Prime"}]},
+{id:1072790,t:"Anyone But You",tp:"movie",p:"/lurEK87kukWNaHd0zYnsi3yzJrs.jpg",r:6.8,g:[35,10749],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:1087822,t:"Argylle",tp:"movie",p:"/nfzE0ZTDEpFMBVRJhNDhfNcBCGJ.jpg",r:6.5,g:[28,35,53],y:"2024",pr:[{id:2,n:"Apple TV+"}]},
+{id:900667,t:"All Quiet on the Western Front",tp:"movie",p:"/hhunmNPfcNBZuMFXBpA6oHcNaJX.jpg",r:7.8,g:[18,10752,36],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:664469,t:"Triangle of Sadness",tp:"movie",p:"/o1PUxECcNFbh99DKFZOPJQP7Wg0.jpg",r:7.4,g:[35,18],y:"2022",pr:[]},
+{id:758009,t:"The Menu",tp:"movie",p:"/oTsHKiMgeRSxN4RGPQGxXOTJeRA.jpg",r:7.2,g:[35,27,53],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:980078,t:"Knock at the Cabin",tp:"movie",p:"/dm06L9pxDOL9jNSK4GB9LDRqe58.jpg",r:7.1,g:[18,27,9648],y:"2023",pr:[{id:119,n:"Prime"}]},
+{id:975902,t:"Beau Is Afraid",tp:"movie",p:"/uRFaB3cKIKy8jOWBH1OlvezIpCJ.jpg",r:6.6,g:[27,18,9648],y:"2023",pr:[]},
+{id:762504,t:"Nope",tp:"movie",p:"/AcKVlWaNVVVFQwro3nLXqPljcYA.jpg",r:7.0,g:[27,9648,18],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:508965,t:"Us",tp:"movie",p:"/ux2viOC4vdvPM0KPZJ4OkXTyZFP.jpg",r:6.9,g:[27,9648,18],y:"2019",pr:[{id:119,n:"Prime"}]},
+{id:458723,t:"Get Out",tp:"movie",p:"/vRzAUEHLmFRqBXqYdXFnMJBpDIP.jpg",r:7.8,g:[27,9648,18],y:"2017",pr:[{id:119,n:"Prime"}]},
+{id:438148,t:"Morbius",tp:"movie",p:"/6JjfSchsU6daXk2AKX8EEBjO3Fm.jpg",r:5.4,g:[28,878,27],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:505,t:"Die Verurteilten",tp:"movie",p:"/9Xw0I38squEl4RxRMF4sBVaqFNh.jpg",r:8.3,g:[18,80],y:"2005",pr:[]},
+{id:289,t:"Casablanca",tp:"movie",p:"/5K7cOHoay2mZusSLezBOY0Qxh8a.jpg",r:8.1,g:[18,10749,10752],y:"1942",pr:[]},
+{id:453395,t:"Doctor Strange in the Multiverse of Madness",tp:"movie",p:"/9Gtg2DzBhmYamXBS1hKAhiwbBKS.jpg",r:6.9,g:[28,12,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:343611,t:"Jack Reacher",tp:"movie",p:"/psAwHDpBcKsNSmvDPqGQfHNqnXj.jpg",r:7.1,g:[28,53,80],y:"2012",pr:[]},
+{id:36955,t:"Gladiator",tp:"movie",p:"/ehGpN04mLJIrSnxcZBMvHeG0eDc.jpg",r:8.2,g:[28,18,10752],y:"2000",pr:[{id:119,n:"Prime"}]},
+{id:453,t:"A Beautiful Mind",tp:"movie",p:"/zwzWCmH72OSC9NA0ipoqynmENTk.jpg",r:8.0,g:[18,36],y:"2001",pr:[]},
+{id:7916,t:"The Social Network",tp:"movie",p:"/n0ybibhJtQ5icDqTp8eRytcIHso.jpg",r:7.7,g:[18,36],y:"2010",pr:[{id:8,n:"Netflix"}]},
+{id:23484,t:"Dallas Buyers Club",tp:"movie",p:"/z14EJ3KCrWuDjTrxzRaLGgAaGBY.jpg",r:7.9,g:[18,36],y:"2013",pr:[]},
+{id:44214,t:"Black Swan",tp:"movie",p:"/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",r:7.8,g:[18,27,9648],y:"2010",pr:[]},
+{id:264660,t:"Ex Machina",tp:"movie",p:"/btCQmIQLGPaAGU4pWbGLBnhzAzq.jpg",r:7.7,g:[18,878,53],y:"2014",pr:[]},
+{id:400160,t:"The SpongeBob Movie: Sponge on the Run",tp:"movie",p:"/jdxSMFKKHbxFGoqGBu8Kj7D5zNm.jpg",r:7.1,g:[12,35],y:"2020",pr:[]},
+{id:13183,t:"Zombieland",tp:"movie",p:"/gOHkNcJzEXDKFQGNKNHsBqrELIN.jpg",r:7.6,g:[35,27],y:"2009",pr:[]},
+{id:399170,t:"Zombieland: Double Tap",tp:"movie",p:"/iMFMDcDqCujRSPSb7i6FMrxAGBe.jpg",r:7.0,g:[35,27],y:"2019",pr:[]},
+{id:8321,t:"Paul",tp:"movie",p:"/1dvTNBbbOSZl14h4Jnw8L3hBM7W.jpg",r:7.0,g:[35,878,12],y:"2011",pr:[]},
+{id:111332,t:"Mud",tp:"movie",p:"/mZfNhJhDaLmAZXbWAUkj1OgXU2F.jpg",r:7.3,g:[18,53],y:"2012",pr:[]},
+{id:256311,t:"Straight Outta Compton",tp:"movie",p:"/8xKY7V4YNfHwFzVjUdXBsQXkZxT.jpg",r:7.8,g:[18,36],y:"2015",pr:[]},
+{id:321347,t:"Eddie the Eagle",tp:"movie",p:"/3NBQFJ8LGDNzMmFRkSmCeQkFnZl.jpg",r:7.3,g:[18,35,36],y:"2016",pr:[]},
+{id:332567,t:"La La Land",tp:"movie",p:"/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg",r:8.0,g:[35,18,10749],y:"2016",pr:[]},
+{id:399404,t:"Bohemian Rhapsody",tp:"movie",p:"/lHu1wtNaczFPGFDTrjCSzeLPTKN.jpg",r:8.0,g:[18,36],y:"2018",pr:[{id:337,n:"Disney+"}]},
+{id:456740,t:"Rocketman",tp:"movie",p:"/9yjAQzGIYHmSvAlkJW1WZY1f5mT.jpg",r:7.7,g:[18,35],y:"2019",pr:[{id:531,n:"Paramount+"}]},
+{id:453105,t:"Mid90s",tp:"movie",p:"/y98FiGNAYiFpSStmJFDCbPJr0HR.jpg",r:7.3,g:[18,35],y:"2018",pr:[]},
+{id:505281,t:"The Midnight Sky",tp:"movie",p:"/748CY3OmWRBcULnUhFVKuUZ2ggg.jpg",r:6.7,g:[878,18],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:524434,t:"Eternals",tp:"movie",p:"/6AdXwFpqFhNMQFqaVKKBMEXFIgh.jpg",r:6.8,g:[28,12,878],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:718227,t:"65",tp:"movie",p:"/dPSEBKp4oMCPEhNynRwN8bWoLKn.jpg",r:6.0,g:[878,28,53],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:385687,t:"Fast X",tp:"movie",p:"/fiVW06jE7z9YnO4trhaMEdclSiC.jpg",r:7.1,g:[28,12],y:"2023",pr:[{id:119,n:"Prime"}]},
+// ── SERIEN ──────────────────────────────────────────────────
+{id:1396,t:"Breaking Bad",tp:"tv",p:"/ggFHVNu6YYI5L9pCfOacjizRGt.jpg",r:9.5,g:[18,80],y:"2008",pr:[{id:8,n:"Netflix"}]},
+{id:1399,t:"Game of Thrones",tp:"tv",p:"/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",r:9.3,g:[10759,18,14],y:"2011",pr:[{id:29,n:"Sky"}]},
+{id:66732,t:"Stranger Things",tp:"tv",p:"/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",r:8.7,g:[878,9648,18],y:"2016",pr:[{id:8,n:"Netflix"}]},
+{id:60059,t:"Better Call Saul",tp:"tv",p:"/fC2HDm5t0kHl7mTm7jxMR31b7by.jpg",r:8.8,g:[18,80],y:"2015",pr:[{id:8,n:"Netflix"}]},
+{id:63174,t:"Lucifer",tp:"tv",p:"/4EYPN5mVIhKLfxGruy7Dy41dTVn.jpg",r:8.5,g:[18,9648,80],y:"2016",pr:[{id:8,n:"Netflix"}]},
+{id:1988,t:"Peaky Blinders",tp:"tv",p:"/vUUqzWa2LnHIVqkaKVn3nyfVnBs.jpg",r:8.8,g:[18,80],y:"2013",pr:[{id:8,n:"Netflix"}]},
+{id:87108,t:"Chernobyl",tp:"tv",p:"/hlLXt2tOPT6RRnjiUmoxyG1LTFi.jpg",r:9.4,g:[18,36],y:"2019",pr:[{id:29,n:"Sky"}]},
+{id:95403,t:"Squid Game",tp:"tv",p:"/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg",r:8.0,g:[18,10759,9648],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:94997,t:"House of the Dragon",tp:"tv",p:"/z2yahl2uefxDCl0nogcRBstwruJ.jpg",r:8.4,g:[18,10759,14],y:"2022",pr:[{id:29,n:"Sky"}]},
+{id:120089,t:"Wednesday",tp:"tv",p:"/9PFonBhy4cQy7Jz20NpMygczOkv.jpg",r:8.7,g:[35,9648,18],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:79744,t:"The Boys",tp:"tv",p:"/2zmTngn1tYC1AvfnrFLhxeD82hz.jpg",r:8.5,g:[878,10759,35],y:"2019",pr:[{id:119,n:"Prime"}]},
+{id:82856,t:"The Mandalorian",tp:"tv",p:"/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg",r:8.5,g:[878,28,12],y:"2019",pr:[{id:337,n:"Disney+"}]},
+{id:71712,t:"The Good Doctor",tp:"tv",p:"/6tfT03sGp9k4c0J3dypjrI8TSAI.jpg",r:8.6,g:[18],y:"2017",pr:[]},
+{id:63351,t:"Vikings",tp:"tv",p:"/bQLrHIW9eqBsAFn1yaRqoXNdwMY.jpg",r:8.5,g:[10759,18],y:"2013",pr:[{id:119,n:"Prime"}]},
+{id:84773,t:"Herr der Ringe: Die Ringe der Macht",tp:"tv",p:"/mYLOqiStMxDK3fYZFirgrMt8z5d.jpg",r:7.3,g:[878,14,12],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:197374,t:"Reacher",tp:"tv",p:"/odVv1sqVs0KxHTiDKzsGQHMhxH.jpg",r:8.1,g:[10759,80],y:"2022",pr:[{id:119,n:"Prime"}]},
+{id:90462,t:"Cobra Kai",tp:"tv",p:"/6POBOBKRe1c6Q1MBFhhAnkKVKCz.jpg",r:8.2,g:[28,18,10759],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:71446,t:"Haus des Geldes",tp:"tv",p:"/reEMJA1uzscCbkpeRJeTT2bjqUp.jpg",r:8.3,g:[80,9648,18],y:"2017",pr:[{id:8,n:"Netflix"}]},
+{id:90228,t:"Bridgerton",tp:"tv",p:"/luoKpgVwi1E5nQsi7W0UuKHu2Rq.jpg",r:8.1,g:[18,10749],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:63247,t:"Westworld",tp:"tv",p:"/lJSzSA5yWFIHLLrGVUWPMFYLfR.jpg",r:8.1,g:[878,18,9648],y:"2016",pr:[{id:29,n:"Sky"}]},
+{id:4011,t:"Lost",tp:"tv",p:"/og6S0aTZU6YUJAbqxeKjCa3kY1E.jpg",r:8.0,g:[18,9648,878],y:"2004",pr:[]},
+{id:1402,t:"The Walking Dead",tp:"tv",p:"/rqeYMLryjcawh2JeRpCVUDXYM5b.jpg",r:8.1,g:[18,878,10759],y:"2010",pr:[]},
+{id:1430,t:"Prison Break",tp:"tv",p:"/5E1BhkCgjLBlqx557Z5oAFbELDv.jpg",r:8.3,g:[18,80,10759],y:"2005",pr:[{id:337,n:"Disney+"}]},
+{id:202555,t:"The Gentlemen",tp:"tv",p:"/cSIRCFcBfDmDCwHU9SFiaTFYbzv.jpg",r:8.0,g:[18,80,35],y:"2024",pr:[{id:8,n:"Netflix"}]},
+{id:65495,t:"The Expanse",tp:"tv",p:"/AwfpmbCFPCKa3tRFIFT26tjpSVP.jpg",r:8.5,g:[878,18,9648],y:"2015",pr:[{id:119,n:"Prime"}]},
+{id:136311,t:"The Diplomat",tp:"tv",p:"/uo4VKZJ2pANnKLsFuALQOxBBuXV.jpg",r:7.7,g:[18,9648,53],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:199666,t:"The Night Agent",tp:"tv",p:"/huv2KkU2WfObqd2mbnhGGRiUVlh.jpg",r:7.7,g:[18,10759,9648],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:104430,t:"Manifest",tp:"tv",p:"/bLfFuHiPHFnGITGO1JwX4kxaJM3.jpg",r:7.6,g:[18,9648,878],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:114410,t:"Yellowstone",tp:"tv",p:"/1Xt1yGTZlMNHMzQrBvlgAiZvdX3.jpg",r:8.3,g:[18,10759,37],y:"2018",pr:[]},
+{id:108978,t:"Emily in Paris",tp:"tv",p:"/9SJJbJ20kYMYMKhVBjuqnOlEStG.jpg",r:7.5,g:[18,35,10749],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:1408,t:"Dr. House",tp:"tv",p:"/3GRe7lbXiI2beYAoJEqiD3fWnDQ.jpg",r:8.6,g:[18,9648],y:"2004",pr:[]},
+{id:215770,t:"One Piece (Live Action)",tp:"tv",p:"/2rmK7mnchw9Xr3XdiAwdt39xAx2.jpg",r:8.3,g:[10759,35,14],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:76331,t:"Dark",tp:"tv",p:"/apbrbWs5wheR9M4sYiyVLgEz6X0.jpg",r:8.8,g:[878,9648,18],y:"2017",pr:[{id:8,n:"Netflix"}]},
+{id:62560,t:"Mr. Robot",tp:"tv",p:"/oKIBhzZzDX07SoE2bOLhZe4OUBK.jpg",r:8.6,g:[18,53,878],y:"2015",pr:[]},
+{id:1434,t:"The Good Place",tp:"tv",p:"/tbxBCjlQIYjFxXz3YLUZ8KOFwMU.jpg",r:8.0,g:[35,18,14],y:"2016",pr:[{id:8,n:"Netflix"}]},
+{id:4607,t:"Lost",tp:"tv",p:"/og6S0aTZU6YUJAbqxeKjCa3kY1E.jpg",r:8.0,g:[18,9648],y:"2004",pr:[]},
+{id:46648,t:"The Americans",tp:"tv",p:"/jGMVFyKqM8Bxjz0NjSCGBaUHIi4.jpg",r:8.2,g:[18,9648,53],y:"2013",pr:[]},
+{id:36189,t:"Friends",tp:"tv",p:"/f496cm9enuEsZkSPzCwnTESEK5s.jpg",r:8.4,g:[35,18],y:"1994",pr:[]},
+{id:1418,t:"The Big Bang Theory",tp:"tv",p:"/ooBGRQBdbGzBxAVfExiO8r7kloA.jpg",r:7.9,g:[35,18],y:"2007",pr:[{id:119,n:"Prime"}]},
+{id:45049,t:"Homeland",tp:"tv",p:"/3bwSmXBgqIHhDDkBbkAGb3NpFDb.jpg",r:7.9,g:[18,9648,53],y:"2011",pr:[]},
+{id:1438,t:"The Wire",tp:"tv",p:"/4lbclFySvugI51fwsyxBTOm4DqK.jpg",r:9.3,g:[18,80],y:"2002",pr:[]},
+{id:1406,t:"CSI: Crime Scene Investigation",tp:"tv",p:"/i5hmoRjHNWady4AtAGICTUXknKH.jpg",r:7.6,g:[18,80,9648],y:"2000",pr:[]},
+{id:58650,t:"Black Mirror",tp:"tv",p:"/7PRddO7z7mcPi21nZTCMGShAyy1.jpg",r:8.3,g:[878,18,53],y:"2011",pr:[{id:8,n:"Netflix"}]},
+{id:60735,t:"The Flash",tp:"tv",p:"/lJoVFPXmYM4oEq9S8RpGJgz3Lnr.jpg",r:7.7,g:[10759,878,18],y:"2014",pr:[]},
+{id:57243,t:"Doctor Who",tp:"tv",p:"/4edFyasCrkH4MKs6H4mHqlrxA6b.jpg",r:8.3,g:[878,12,18],y:"2005",pr:[]},
+{id:1622,t:"Supernatural",tp:"tv",p:"/KoYWXbnYuS3b0GyQPkbuexlVK9.jpg",r:8.4,g:[18,9648,14],y:"2005",pr:[]},
+{id:35851,t:"Modern Family",tp:"tv",p:"/ck4pDlHPO5j2dOSh6rDdE5XOyIm.jpg",r:7.9,g:[35,18],y:"2009",pr:[]},
+{id:48891,t:"Parks and Recreation",tp:"tv",p:"/nbWB3HryBKMNHKZbHmGcBqHBT5k.jpg",r:8.0,g:[35,18],y:"2009",pr:[{id:119,n:"Prime"}]},
+{id:2190,t:"South Park",tp:"tv",p:"/sByGfSwngtbGHHOT0ORKRHSYhBR.jpg",r:8.7,g:[35],y:"1997",pr:[]},
+{id:1668,t:"How I Met Your Mother",tp:"tv",p:"/b34jPzmB0wZy7EjUZoleXOl2RRI.jpg",r:8.2,g:[35,18,10749],y:"2005",pr:[]},
+{id:73586,t:"Rick and Morty",tp:"tv",p:"/gdIrmf2DdY5mgN6ycVP0XlzKzbE.jpg",r:9.3,g:[878,35],y:"2013",pr:[{id:8,n:"Netflix"}]},
+{id:67979,t:"Ozark",tp:"tv",p:"/pCGyPVrI9Fzc6UQvBovtE3fyEPO.jpg",r:8.4,g:[18,80,53],y:"2017",pr:[{id:8,n:"Netflix"}]},
+{id:85552,t:"Euphoria",tp:"tv",p:"/jtnfNzqZwN4E32FGGxx1YZaBWWf.jpg",r:8.4,g:[18],y:"2019",pr:[{id:29,n:"Sky"}]},
+{id:76479,t:"The Witcher",tp:"tv",p:"/zrPpUlehQaBf8YX2NrVrKK8IEpf.jpg",r:8.1,g:[878,14,10759],y:"2019",pr:[{id:8,n:"Netflix"}]},
+{id:46952,t:"Suits",tp:"tv",p:"/1tepbCJIAlxnl3qSVFzpNFmfPfB.jpg",r:8.5,g:[18,80],y:"2011",pr:[{id:119,n:"Prime"}]},
+{id:1905,t:"Mad Men",tp:"tv",p:"/a3mDqMjb5e5cJO0a7Y5EBxaH6mU.jpg",r:8.6,g:[18,36],y:"2007",pr:[]},
+{id:135157,t:"Tulsa King",tp:"tv",p:"/oTHas5M1VuGE9fS1DyJANbL3Y0Z.jpg",r:8.2,g:[18,80],y:"2022",pr:[{id:531,n:"Paramount+"}]},
+{id:37680,t:"Justified",tp:"tv",p:"/aGQ1tGj1l0O4FRXBzCQoWgHuaRj.jpg",r:8.6,g:[18,80,53],y:"2010",pr:[]},
+{id:1409,t:"Dexter",tp:"tv",p:"/58H6Ctze1nnpS0s4OBbRkQdMGaR.jpg",r:8.6,g:[18,80,9648],y:"2006",pr:[{id:119,n:"Prime"}]},
+{id:41008,t:"Downton Abbey",tp:"tv",p:"/dSrnnNv91YpLpUJApBsJd2hzFSo.jpg",r:8.2,g:[18,36],y:"2010",pr:[]},
+{id:35,t:"NCIS",tp:"tv",p:"/2exOHePjOTquUsbThPGhuEjYTyA.jpg",r:7.4,g:[18,80,10759],y:"2003",pr:[]},
+{id:1428,t:"CSI: Miami",tp:"tv",p:"/9QF6VKUWkJKCqwPm7mxYWiR3wfM.jpg",r:7.2,g:[18,80,9648],y:"2002",pr:[]},
+{id:1411,t:"Grey's Anatomy",tp:"tv",p:"/clnyhPqj1SNgpAdeSS6a6fwE6Bo.jpg",r:8.2,g:[18,10749],y:"2005",pr:[{id:337,n:"Disney+"}]},
+{id:60866,t:"Narcos",tp:"tv",p:"/rTmal9fDbwh5F0waol2hq35U4ah.jpg",r:8.8,g:[18,80,36],y:"2015",pr:[{id:8,n:"Netflix"}]},
+{id:75219,t:"Narcos: Mexico",tp:"tv",p:"/qMf2xAUFpQMBNFBh7KeXTa5uf7B.jpg",r:8.3,g:[18,80,36],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:69478,t:"The Haunting of Hill House",tp:"tv",p:"/bq9ydBWIQqmS0m2FMJbXsOqhREN.jpg",r:8.6,g:[27,18,9648],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:90802,t:"The Haunting of Bly Manor",tp:"tv",p:"/jPy6iZe74pGJdoxnMuHidnmzHoS.jpg",r:7.5,g:[27,18,10749],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:95479,t:"Squid Game 2",tp:"tv",p:"/oOAaJITxGe1SBHUYKkxPTFa0Alv.jpg",r:7.1,g:[18,10759,9648],y:"2024",pr:[{id:8,n:"Netflix"}]},
+{id:93405,t:"Squid Game",tp:"tv",p:"/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg",r:8.0,g:[18,10759,9648],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:76669,t:"Elite",tp:"tv",p:"/3ESgMfb5IbL9zExMsFbGnnxPiA3.jpg",r:7.5,g:[18,9648,53],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:70785,t:"The 100",tp:"tv",p:"/ycAOBuOzNMSABIOZBi5hGDfkPBB.jpg",r:7.7,g:[878,18,53],y:"2014",pr:[{id:8,n:"Netflix"}]},
+{id:67195,t:"The OA",tp:"tv",p:"/kVnOuJBDDJVgwDYoqUMRpiLb4P.jpg",r:7.9,g:[878,9648,18],y:"2016",pr:[{id:8,n:"Netflix"}]},
+{id:72879,t:"Ragnarök",tp:"tv",p:"/qfouZGJNarN7TuXNJFPXjTFzfMZ.jpg",r:7.5,g:[878,14,18],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:86831,t:"Virgin River",tp:"tv",p:"/6N8CIJOGoznGkNFH7R2zQsBvyad.jpg",r:7.9,g:[18,10749],y:"2019",pr:[{id:8,n:"Netflix"}]},
+{id:88396,t:"The Falcon and the Winter Soldier",tp:"tv",p:"/6kbAMLteGO8yyewYau6bJ683sw7.jpg",r:7.7,g:[878,28,12],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:202879,t:"Ms. Marvel",tp:"tv",p:"/gEBCMXPDFvh6C6vMX6cBFhWJ9Hy.jpg",r:6.9,g:[878,28,12],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:203833,t:"Moon Knight",tp:"tv",p:"/x6FsYvt33is1MkWKqkS0oGEf88j.jpg",r:7.3,g:[878,28,12],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:92782,t:"What If...?",tp:"tv",p:"/fXNxNY5IKpPPl7GqcnmHBbx6FfE.jpg",r:7.5,g:[878,35,12],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:83867,t:"Star Wars: The Book of Boba Fett",tp:"tv",p:"/gNbdjDi1HamTCrfvM9JeA94bNi2.jpg",r:7.3,g:[878,28,12],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:115036,t:"Obi-Wan Kenobi",tp:"tv",p:"/ylbaFOCMM7GBHF0BXHK9HJmUEdQ.jpg",r:7.3,g:[878,28,12],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:83097,t:"She-Hulk: Attorney at Law",tp:"tv",p:"/hJfI6AGrmr4uSHnNSwJZkrQ8e7t.jpg",r:5.5,g:[35,28,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:114462,t:"Ahsoka",tp:"tv",p:"/eso8jslkuhvk7BgXHHCCBV7CJvJ.jpg",r:7.4,g:[878,28,12],y:"2023",pr:[{id:337,n:"Disney+"}]},
+{id:119051,t:"Echoes of the Empire",tp:"tv",p:"/qMf2xAUFpQMBNFBh7KeXTa5uf7B.jpg",r:7.0,g:[878,28,12],y:"2023",pr:[{id:337,n:"Disney+"}]},
+{id:94605,t:"Arcane",tp:"tv",p:"/xQ6GijOFnxTyUzqiwGpVxgfcgqI.jpg",r:9.0,g:[878,35,14],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:85083,t:"Emily in Paris",tp:"tv",p:"/9SJJbJ20kYMYMKhVBjuqnOlEStG.jpg",r:7.5,g:[18,35,10749],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:135907,t:"You",tp:"tv",p:"/96wnQJbknS3bMSQXBqG7bAtKaHK.jpg",r:7.7,g:[18,9648,53],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:93762,t:"All of Us Are Dead",tp:"tv",p:"/I1pa7AqSWP5DJA1bIftZrDJvBo.jpg",r:7.7,g:[18,878,27],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:70523,t:"The Umbrella Academy",tp:"tv",p:"/scZlQQqnQ29arFfMkJkABDVFPgf.jpg",r:7.9,g:[878,28,18],y:"2019",pr:[{id:8,n:"Netflix"}]},
+{id:62286,t:"Fear the Walking Dead",tp:"tv",p:"/PyBQdNVpGUgPVlBDijl3oCFHFcS.jpg",r:7.5,g:[18,878],y:"2015",pr:[]},
+{id:122226,t:"1883",tp:"tv",p:"/i4KCJk62JV9wR9ZFDG6Xpb9QKTO.jpg",r:8.7,g:[18,37,10759],y:"2021",pr:[{id:531,n:"Paramount+"}]},
+{id:111800,t:"1923",tp:"tv",p:"/qKFftObMxXdJBJpGr43OLFBY32q.jpg",r:8.3,g:[18,37],y:"2022",pr:[{id:531,n:"Paramount+"}]},
+{id:76744,t:"Succession",tp:"tv",p:"/e2X4vzKKLUCOEi0JsHXHDGNkqI.jpg",r:8.9,g:[18,80],y:"2018",pr:[{id:29,n:"Sky"}]},
+{id:88329,t:"Invasion",tp:"tv",p:"/52sCKArhI7Qe2fdMBsEBFiyCfDt.jpg",r:6.8,g:[878,18,9648],y:"2021",pr:[{id:2,n:"Apple TV+"}]},
+{id:95396,t:"Severance",tp:"tv",p:"/lExfpJQBOGDHuHCCuyth9E2KCLT.jpg",r:8.7,g:[878,18,9648],y:"2022",pr:[{id:2,n:"Apple TV+"}]},
+{id:136315,t:"Ted Lasso",tp:"tv",p:"/5fhZdwP1DVJ0FyVH6vrFdHwpXIn.jpg",r:8.8,g:[35,18],y:"2020",pr:[{id:2,n:"Apple TV+"}]},
+{id:87479,t:"The Morning Show",tp:"tv",p:"/oWPQMNMYWRHhfH1tD3MIZSGiPiR.jpg",r:8.3,g:[18,36],y:"2019",pr:[{id:2,n:"Apple TV+"}]},
+{id:37854,t:"One Piece",tp:"tv",p:"/e3NBGiAifW9Xt8xD5tpARskjccO.jpg",r:8.7,g:[10759,35,14],y:"1999",pr:[{id:8,n:"Netflix"}]},
+{id:96677,t:"Lupin",tp:"tv",p:"/sgxnd6XaAMc8wLMBxIROKUxnMPX.jpg",r:7.7,g:[18,80,9648],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:130392,t:"The Diplomat",tp:"tv",p:"/uo4VKZJ2pANnKLsFuALQOxBBuXV.jpg",r:7.7,g:[18,9648],y:"2023",pr:[{id:8,n:"Netflix"}]},
+{id:192391,t:"The Lincoln Lawyer",tp:"tv",p:"/gXjHc3VuD8fP4qXUV5cQgBaYBsM.jpg",r:7.9,g:[18,80,9648],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:163552,t:"Ginny & Georgia",tp:"tv",p:"/6JqLPe6KgLzpXalvBMH4m9fLiAP.jpg",r:7.8,g:[18,35,10749],y:"2021",pr:[{id:8,n:"Netflix"}]},
+{id:114461,t:"Andor",tp:"tv",p:"/59SVNwLfoMnZPPB6ukW6dlPxAdI.jpg",r:8.4,g:[878,28,12],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:130518,t:"The Bear",tp:"tv",p:"/sHFlbKS3WLqMnp9t2ghADIJFnuQ.jpg",r:8.8,g:[18,35],y:"2022",pr:[{id:337,n:"Disney+"}]},
+{id:101997,t:"The White Lotus",tp:"tv",p:"/zBCaEcBxmz7AcTLmKdHmqMjhgE5.jpg",r:8.1,g:[18,35],y:"2021",pr:[{id:29,n:"Sky"}]},
+{id:87814,t:"The Handmaid's Tale",tp:"tv",p:"/y1fZFGFCoJeeoqz4bvI6Z3teyoh.jpg",r:8.4,g:[878,18,36],y:"2017",pr:[]},
+{id:66852,t:"Daredevil",tp:"tv",p:"/QWZSPs0fPMCOtI7TGUMhxAIvCF.jpg",r:8.7,g:[28,80,18],y:"2015",pr:[{id:337,n:"Disney+"}]},
+{id:67178,t:"Jessica Jones",tp:"tv",p:"/uDgi7CRKFnNbmFrJlSCzGzHMoDE.jpg",r:7.9,g:[28,80,18],y:"2015",pr:[{id:337,n:"Disney+"}]},
+{id:67789,t:"Luke Cage",tp:"tv",p:"/5gPshxYEi0O16LmxrBFGBqJKCgA.jpg",r:7.2,g:[28,80,18],y:"2016",pr:[{id:337,n:"Disney+"}]},
+{id:61889,t:"Marvel's Agents of S.H.I.E.L.D.",tp:"tv",p:"/TLzTXbSwmKNNNif6UqeBTAFm3TT.jpg",r:7.4,g:[878,28,18],y:"2013",pr:[{id:337,n:"Disney+"}]},
+{id:67466,t:"The Punisher",tp:"tv",p:"/7tmnnU4aOlOFGdWIOELTKnCMs1n.jpg",r:7.9,g:[28,80,18],y:"2017",pr:[{id:337,n:"Disney+"}]},
+{id:217234,t:"Echo",tp:"tv",p:"/lOSdUkGQmbAl5JQ3QoHqBZUbZhC.jpg",r:6.8,g:[28,80,18],y:"2024",pr:[{id:337,n:"Disney+"}]},
+{id:62017,t:"The Fall",tp:"tv",p:"/3PGHHkBIqX0GCVV3yRVOHIUX7e3.jpg",r:8.2,g:[18,80,9648],y:"2013",pr:[]},
+{id:75006,t:"The Crown",tp:"tv",p:"/6XRgfcXbevJWBbOCqvGmfHV3M4.jpg",r:8.2,g:[18,36],y:"2016",pr:[{id:8,n:"Netflix"}]},
+{id:57374,t:"The Witcher: Blood Origin",tp:"tv",p:"/mia14ZBbX1UBmpMH1ADqK4kEjJi.jpg",r:5.8,g:[14,10759,878],y:"2022",pr:[{id:8,n:"Netflix"}]},
+{id:67168,t:"Mindhunter",tp:"tv",p:"/AxGgWHBG3T7cBVkk3MlEHBVPVlK.jpg",r:8.6,g:[18,80,9648],y:"2017",pr:[{id:8,n:"Netflix"}]},
+{id:85271,t:"WandaVision",tp:"tv",p:"/glKDfE6btIRcmhl7XHEGqdalAeQ.jpg",r:7.9,g:[878,35,18],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:84958,t:"Loki",tp:"tv",p:"/kEl2t3OhXc3Zb9FBh1AuYzRTgZp.jpg",r:8.1,g:[878,28,12],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:100088,t:"The Last of Us",tp:"tv",p:"/uKvVjHNqB5VmOrdxqAt2F7J78ED.jpg",r:8.6,g:[18,878,10759],y:"2023",pr:[{id:29,n:"Sky"}]},
+{id:125988,t:"House of Cards",tp:"tv",p:"/hKWxWjFwnMvkWQawbhvwABCJISR.jpg",r:8.3,g:[18,36,80],y:"2013",pr:[{id:8,n:"Netflix"}]},
+{id:66788,t:"Bloodline",tp:"tv",p:"/5eDRGpFTnAJpXrOgRjEzB8Ei6GN.jpg",r:7.5,g:[18,53,9648],y:"2015",pr:[{id:8,n:"Netflix"}]},
+{id:80986,t:"Altered Carbon",tp:"tv",p:"/rT3ZZcT3NKN8exJjJqVMqFiH3Sh.jpg",r:8.0,g:[878,18,53],y:"2018",pr:[{id:8,n:"Netflix"}]},
+{id:69050,t:"Riverdale",tp:"tv",p:"/1KNgaDqoJbVDsXPuABPDDtgqbBl.jpg",r:7.2,g:[18,9648,80],y:"2017",pr:[{id:8,n:"Netflix"}]},
+{id:44217,t:"Arrow",tp:"tv",p:"/gKG5QGz5Ngf8fgWpBsWtlg5L2SF.jpg",r:7.5,g:[10759,28,18],y:"2012",pr:[]},
+{id:73375,t:"SEAL Team",tp:"tv",p:"/vbpDOQjWWIlQFMjrgQfE14HFwXp.jpg",r:7.8,g:[18,10759,10752],y:"2017",pr:[{id:531,n:"Paramount+"}]},
+{id:81189,t:"Jack Ryan",tp:"tv",p:"/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg",r:8.0,g:[10759,18,9648],y:"2018",pr:[{id:119,n:"Prime"}]},
+{id:32726,t:"Burn Notice",tp:"tv",p:"/bOiEpQQ14BXB0ZfBt9aW6VzBpIG.jpg",r:7.8,g:[10759,18,35],y:"2007",pr:[]},
+{id:1416,t:"Grey's Anatomy",tp:"tv",p:"/clnyhPqj1SNgpAdeSS6a6fwE6Bo.jpg",r:8.2,g:[18,10749],y:"2005",pr:[{id:337,n:"Disney+"}]},
+{id:54344,t:"The Rookie",tp:"tv",p:"/9FbkBKpsMRuDvdDqEMxQFrNiJOi.jpg",r:8.0,g:[18,80,10759],y:"2018",pr:[{id:337,n:"Disney+"}]},
+{id:46261,t:"Castle",tp:"tv",p:"/vFk8vMQBRwMFMHChMSsFDqtSjJg.jpg",r:8.0,g:[18,80,35],y:"2009",pr:[]},
+{id:73197,t:"Snowpiercer",tp:"tv",p:"/5GXWM5LFcGJPFKDnFHqMVwxmxo2.jpg",r:7.3,g:[878,18,53],y:"2020",pr:[{id:8,n:"Netflix"}]},
+{id:92749,t:"Hawkeye",tp:"tv",p:"/pqzjCxPVc9TkVgGRWeAoMmyqkZV.jpg",r:7.6,g:[878,28,35],y:"2021",pr:[{id:337,n:"Disney+"}]},
+{id:119757,t:"Shrinking",tp:"tv",p:"/cBOTbOUqSOXxnPcBGHNkSCZ6O1C.jpg",r:8.4,g:[35,18],y:"2023",pr:[{id:2,n:"Apple TV+"}]},
+{id:218230,t:"Silo",tp:"tv",p:"/2cYPMgLonBHN0J15FMoPWLnTUv4.jpg",r:8.2,g:[878,18,9648],y:"2023",pr:[{id:2,n:"Apple TV+"}]},
+{id:115735,t:"For All Mankind",tp:"tv",p:"/3eI3DnhPBGFq1JqHMIGn2oSBzOM.jpg",r:8.2,g:[878,18,36],y:"2019",pr:[{id:2,n:"Apple TV+"}]},
+{id:106379,t:"Foundation",tp:"tv",p:"/rFhM7IwuPRKJtCb0kELDH4CRDE5.jpg",r:7.6,g:[878,18,9648],y:"2021",pr:[{id:2,n:"Apple TV+"}]},
+{id:92783,t:"The Essex Serpent",tp:"tv",p:"/lExfpJQBOGDHuHCCuyth9E2KCLT.jpg",r:7.0,g:[18,27,9648],y:"2022",pr:[{id:2,n:"Apple TV+"}]},
+];
+
+// Duplikate entfernen
+const seen_ids = new Set();
+const TITLES = DB.filter(m => {
+  if (seen_ids.has(m.id)) return false;
+  seen_ids.add(m.id); return true;
+});
+console.log('Datenbasis:', TITLES.length, 'Titel');
+
+// ══════════════════════════════════════════════════════════
+// STATE & STORAGE
+// ══════════════════════════════════════════════════════════
+const S = {
+  screen:"loading", names:{p1:"Spieler 1",p2:"Spieler 2"},
+  nameEdit:{p1:"",p2:""}, player:"p1", queue:[],
+  p1Liked:[], p2Liked:[], p1Seen:new Set(), p2Seen:new Set(),
+  matches:[], newMatch:null, media:"movie",
+  drag:{on:false,x:0}, animating:false, extraTitles:[],
+};
+
+function save() {
+  try {
+    localStorage.setItem("cm_names",   JSON.stringify(S.names));
+    localStorage.setItem("cm_p1l",     JSON.stringify(S.p1Liked));
+    localStorage.setItem("cm_p2l",     JSON.stringify(S.p2Liked));
+    localStorage.setItem("cm_p1s",     JSON.stringify([...S.p1Seen]));
+    localStorage.setItem("cm_p2s",     JSON.stringify([...S.p2Seen]));
+    localStorage.setItem("cm_matches", JSON.stringify(S.matches));
+  } catch(e) {}
+}
+
+function load() {
+  try {
+    const ns  = localStorage.getItem("cm_names");
+    const p1l = localStorage.getItem("cm_p1l");
+    const p2l = localStorage.getItem("cm_p2l");
+    const p1s = localStorage.getItem("cm_p1s");
+    const p2s = localStorage.getItem("cm_p2s");
+    const ms  = localStorage.getItem("cm_matches");
+    if (ns)  { const n=JSON.parse(ns); S.names=n; S.nameEdit={...n}; }
+    if (p1l) S.p1Liked = JSON.parse(p1l);
+    if (p2l) S.p2Liked = JSON.parse(p2l);
+    if (p1s) S.p1Seen  = new Set(JSON.parse(p1s));
+    if (p2s) S.p2Seen  = new Set(JSON.parse(p2s));
+    if (ms)  S.matches  = JSON.parse(ms);
+    S.screen = ns ? "select" : "names";
+  } catch(e) { S.screen = "names"; }
+}
+
+// ══════════════════════════════════════════════════════════
+// QUEUE
+// ══════════════════════════════════════════════════════════
+function buildQueue() {
+  const seen = S.player==="p1" ? S.p1Seen : S.p2Seen;
+  const all  = [...TITLES, ...S.extraTitles];
+  let pool;
+  if (S.media==="both") {
+    const mv = all.filter(m=>m.tp==="movie"&&!seen.has(String(m.id)));
+    const tv = all.filter(m=>m.tp==="tv"&&!seen.has(String(m.id)));
+    pool=[];
+    for(let i=0;i<Math.max(mv.length,tv.length);i++){
+      if(mv[i])pool.push(mv[i]);
+      if(tv[i])pool.push(tv[i]);
+    }
+  } else {
+    pool = all.filter(m=>m.tp===S.media&&!seen.has(String(m.id)));
+  }
+  if (!pool.length) {
+    // Reset seen and restart
+    if(S.player==="p1")S.p1Seen=new Set();else S.p2Seen=new Set();
+    return buildQueue();
+  }
+  S.queue = pool;
+  // Sofort nächste Bilder vorausladen
+  preloadImages(pool.slice(0,5));
+}
+
+// ══════════════════════════════════════════════════════════
+// BILD-PRELOADING — Das ist der Kern-Fix für flackernde Bilder
+// ══════════════════════════════════════════════════════════
+const preloadCache = new Set();
+function preloadImages(items) {
+  items.forEach(item => {
+    if (!item.p || preloadCache.has(item.p)) return;
+    preloadCache.add(item.p);
+    const img = new Image();
+    img.src = IMG + item.p;
+  });
+}
+
+// Bild mit fade-in nach dem Laden
+function makeCardImg(src, onLoad) {
+  const img = document.createElement('img');
+  img.className = 'card-img';
+  img.draggable = false;
+  if (preloadCache.has(src.replace(IMG,''))) {
+    // Bild bereits gecacht → sofort anzeigen
+    img.className = 'card-img loaded';
+  }
+  img.onload = () => {
+    img.classList.add('loaded');
+    if (onLoad) onLoad();
+  };
+  img.onerror = () => {
+    img.style.display='none';
+  };
+  img.src = src;
+  return img;
+}
+
+// ══════════════════════════════════════════════════════════
+// TMDB NACHLADEN
+// ══════════════════════════════════════════════════════════
+let tmdbPageM=1, tmdbPageT=1;
+function fetchTmdbBg(type) {
+  const page = type==="movie" ? tmdbPageM++ : tmdbPageT++;
+  const date = type==="movie" ? "primary_release_date.gte=2000-01-01" : "first_air_date.gte=2000-01-01";
+  const url  = `${BASE}/discover/${type}?api_key=${API}&language=de-DE&sort_by=popularity.desc&vote_count.gte=200&without_genres=16&${date}&page=${page}`;
+  fetch(url).then(r=>r.ok?r.json():null).then(d=>{
+    if(!d?.results) return;
+    const ex = new Set(TITLES.map(m=>m.id));
+    const fresh = d.results.filter(m=>!ex.has(m.id)).map(m=>({
+      id:m.id, t:m.title||m.name||"", tp:type,
+      p:m.poster_path||"",
+      r:parseFloat((m.vote_average||0).toFixed(1)),
+      g:(m.genre_ids||[]).slice(0,4),
+      y:(m.release_date||m.first_air_date||"").slice(0,4),
+      pr:[],
+    }));
+    S.extraTitles.push(...fresh);
+    fresh.slice(0,5).forEach(m=>fetchProviderBg(type,m.id));
+    preloadImages(fresh.slice(0,5));
+  }).catch(()=>{});
+}
+
+function fetchProviderBg(type, id) {
+  fetch(`${BASE}/${type}/${id}/watch/providers?api_key=${API}`)
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{
+      if(!d)return;
+      const p=(d.results?.DE?.flatrate||[]).slice(0,4).map(x=>({id:x.provider_id,n:PROV[x.provider_id]?.n||x.provider_name}));
+      if(!p.length)return;
+      S.queue=S.queue.map(m=>String(m.id)===String(id)?{...m,pr:p}:m);
+      S.extraTitles=S.extraTitles.map(m=>String(m.id)===String(id)?{...m,pr:p}:m);
+      // Provider-Badges auf aktueller Karte aktualisieren
+      if(S.queue[0]&&String(S.queue[0].id)===String(id)){
+        const prow=document.getElementById('card-providers');
+        if(prow){prow.innerHTML=p.map(x=>`<span class="pbadge" style="background:${PROV[x.id]?.c||'#555'}">${x.n}</span>`).join('')}
+      }
+    }).catch(()=>{});
+}
+
+// ══════════════════════════════════════════════════════════
+// SWIPE
+// ══════════════════════════════════════════════════════════
+function doSwipe(dir) {
+  if(!S.queue.length||S.animating)return;
+  const item=S.queue[0];
+  const id=String(item.id);
+  const isP1=S.player==="p1";
+  S.animating=true;
+
+  // Karte animieren
+  const card=document.getElementById('main-card');
+  if(card){
+    const tx=dir==="right"?660:-660;
+    const rot=dir==="right"?18:-18;
+    card.classList.add('flying');
+    card.style.transform=`translateX(${tx}px) rotate(${rot}deg)`;
+    card.style.opacity='0';
+  }
+
+  let matched=null;
+  if(dir==="right"){
+    if(isP1){S.p1Liked.push(id);if(S.p2Liked.includes(id)){matched=item;S.matches.push(item);}}
+    else     {S.p2Liked.push(id);if(S.p1Liked.includes(id)){matched=item;S.matches.push(item);}}
+  }
+  if(isP1)S.p1Seen.add(id);else S.p2Seen.add(id);
+  save();
+
+  setTimeout(()=>{
+    S.animating=false;
+    S.queue.shift();
+    // Nächste Bilder vorausladen
+    preloadImages(S.queue.slice(0,5));
+    if(S.queue.length<5){
+      fetchTmdbBg(S.media==="tv"?"tv":"movie");
+      if(S.media==="both")fetchTmdbBg("tv");
+    }
+    if(matched){S.newMatch=matched;renderSwipe();showMatch(matched);}
+    else renderSwipe();
+  },340);
+}
+
+// ══════════════════════════════════════════════════════════
+// DRAG / TOUCH
+// ══════════════════════════════════════════════════════════
+function initDrag() {
+  const card=document.getElementById('main-card');
+  if(!card)return;
+  let startX=0, startY=0, dragging=false;
+
+  function start(e){
+    if(S.animating)return;
+    const t=e.touches?.[0]||e;
+    startX=t.clientX; startY=t.clientY; dragging=true;
+    S.drag={on:true,x:0};
+    card.style.transition='none';
+    card.classList.remove('snap-back');
+  }
+  function move(e){
+    if(!dragging)return;
+    const t=e.touches?.[0]||e;
+    const dx=t.clientX-startX;
+    const dy=t.clientY-startY;
+    // Wenn hauptsächlich vertikales Scrollen: ignorieren
+    if(!S.drag.on&&Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>10){dragging=false;return;}
+    if(e.cancelable)e.preventDefault();
+    S.drag={on:true,x:dx};
+    card.style.transform=`translateX(${dx}px) rotate(${dx*0.045}deg)`;
+    const lo=Math.min(1,Math.max(0,dx/55));
+    const no=Math.min(1,Math.max(0,-dx/55));
+    const ls=document.getElementById('like-stamp');
+    const ns=document.getElementById('nope-stamp');
+    if(ls)ls.style.opacity=lo;
+    if(ns)ns.style.opacity=no;
+  }
+  function end(){
+    if(!dragging)return;
+    dragging=false;
+    if(!S.drag.on)return;
+    S.drag.on=false;
+    if(S.drag.x>65)doSwipe('right');
+    else if(S.drag.x<-65)doSwipe('left');
+    else{
+      card.classList.add('snap-back');
+      card.style.transform='translateX(0) rotate(0)';
+      const ls=document.getElementById('like-stamp');
+      const ns=document.getElementById('nope-stamp');
+      if(ls)ls.style.opacity=0;
+      if(ns)ns.style.opacity=0;
+    }
+  }
+  card.addEventListener('mousedown',start);
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseup',end);
+  card.addEventListener('touchstart',start,{passive:true});
+  card.addEventListener('touchmove',move,{passive:false});
+  card.addEventListener('touchend',end);
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER HELPERS
+// ══════════════════════════════════════════════════════════
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function provHTML(pr){
+  if(!pr?.length)return'';
+  return`<div id="card-providers" class="prow">${pr.map(p=>`<span class="pbadge" style="background:${PROV[p.id]?.c||'#555'}">${esc(p.n)}</span>`).join('')}</div>`;
+}
+function genHTML(g){
+  if(!g?.length)return'';
+  const tags=g.slice(0,3).filter(id=>GEN[id]).map(id=>`<span class="gtag">${GEN[id]}</span>`);
+  return tags.length?`<div class="grow">${tags.join('')}</div>`:'';
+}
+function logoHTML(sm){
+  const sz=sm?26:34,fs=sm?19:26;
+  return`<div style="display:flex;align-items:center;gap:${sm?7:10}px;user-select:none">
+    <div style="width:${sz}px;height:${sz}px;border-radius:${sm?7:10}px;background:linear-gradient(140deg,#C9A84C,#A88A38);display:flex;align-items:center;justify-content:center;font-size:${sm?13:17}px;flex-shrink:0;box-shadow:0 2px 14px rgba(201,168,76,.3)">🎬</div>
+    <span class="serif" style="font-size:${fs}px;font-weight:400;color:#F2EEE4;line-height:1">CinemaMatch</span>
+  </div>`;
+}
+
+const app=document.getElementById('app');
+function setHTML(html){app.innerHTML=html;}
+
+// ══════════════════════════════════════════════════════════
+// SCREENS
+// ══════════════════════════════════════════════════════════
+function renderLoading(){
+  setHTML(`<div class="fade-in" style="display:flex;flex-direction:column;align-items:center;gap:22px">
+    ${logoHTML(false)}<div class="spinner"></div></div>`);
+}
+
+function renderNames(){
+  setHTML(`<div class="fade-up screen" style="max-width:360px">
+    <div style="text-align:center;margin-bottom:34px">${logoHTML(false)}
+      <p style="margin-top:11px;font-size:13px;color:#8A8780;line-height:1.7;font-weight:300">Wie heißt ihr?</p>
+    </div>
+    <div class="card-box">
+      <div style="margin-bottom:13px">
+        <div class="label-sm">Spieler 1</div>
+        <input id="n1" class="inp" placeholder="Dein Name…" value="${esc(S.nameEdit.p1)}" autocomplete="off">
+      </div>
+      <div><div class="label-sm">Spieler 2</div>
+        <input id="n2" class="inp" placeholder="Ihr Name…" value="${esc(S.nameEdit.p2)}" autocomplete="off">
+      </div>
+    </div>
+    <button class="gold-btn press" onclick="saveNames()">Weiter →</button>
+  </div>`);
+  setTimeout(()=>{
+    const n1=document.getElementById('n1');
+    const n2=document.getElementById('n2');
+    if(n1)n1.addEventListener('keydown',e=>e.key==='Enter'&&saveNames());
+    if(n2)n2.addEventListener('keydown',e=>e.key==='Enter'&&saveNames());
+  },0);
+}
+
+function renderSelect(){
+  const mb=S.matches.length>0?`<button class="match-badge press" onclick="goTo('matches')">✦ ${S.matches.length} ${S.matches.length===1?'Match':'Matches'}</button>`:'<div></div>';
+  const tabs=['movie','tv','both'].map(t=>{
+    const l={movie:'🎬 Filme',tv:'📺 Serien',both:'Beides'}[t];
+    return`<button class="tab-btn ${S.media===t?'active':''} pl" onclick="setMedia('${t}')">${l}</button>`;
+  }).join('');
+  const players=['p1','p2'].map((p,i)=>{
+    const liked=(p==='p1'?S.p1Liked:S.p2Liked).length;
+    const seen=(p==='p1'?S.p1Seen:S.p2Seen).size;
+    const g=i===0?'linear-gradient(135deg,#C9A84C,#8A6A28)':'linear-gradient(135deg,#6C7BC4,#3D4890)';
+    return`<button class="player-btn press" onclick="startPlayer('${p}')">
+      <div style="width:44px;height:44px;border-radius:50%;background:${g};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${i===0?'🍿':'🎬'}</div>
+      <div style="flex:1;text-align:left">
+        <div style="font-size:15px;font-weight:600;color:#F2EEE4;margin-bottom:2px">${esc(S.names[p])}</div>
+        <div style="font-size:11px;color:#4A4A50;font-weight:300">${liked} Likes · ${seen} gesehen</div>
+      </div>
+      <span style="color:#4A4A50;font-size:17px">›</span>
+    </button>`;
+  }).join('');
+  setHTML(`<div class="fade-up screen">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      ${logoHTML(true)}${mb}
+    </div>
+    <div style="background:#111115;border:1px solid #1E1E24;border-radius:14px;padding:4px;display:flex;gap:3px;margin-bottom:15px">${tabs}</div>
+    <div class="label-sm" style="margin-bottom:8px">Wer ist dran?</div>
+    <div style="display:flex;flex-direction:column;gap:10px">${players}</div>
+    <button class="pl" style="width:100%;margin-top:12px;background:transparent;border:none;padding:9px;font-size:12px;color:#4A4A50;cursor:pointer" onclick="goTo('names')">✎ Namen ändern</button>
+  </div>`);
+}
+
+function renderSwipe(){
+  const card=S.queue[0];
+  const bg=S.queue[1];
+  const ml=S.matches.length>0;
+
+  setHTML(`<div id="swipe-wrap">
+    <div id="topbar">
+      <button class="topbar-btn press" onclick="goTo('select')">←</button>
+      <div style="text-align:center">
+        <div style="font-size:14px;font-weight:600;color:#F2EEE4">${esc(S.names[S.player])}</div>
+        <div style="font-size:11px;color:#4A4A50;font-weight:300;margin-top:1px">${S.media==='movie'?'Filme':S.media==='tv'?'Serien':'Alles'}</div>
+      </div>
+      <button class="topbar-btn ${ml?'gold':''} press" onclick="goTo('matches')">✦ ${S.matches.length}</button>
+    </div>
+    <div id="card-stage">
+      ${bg&&bg.p?`<div class="card card-bg" id="bg-card"></div>`:''}
+      <div id="card-slot"></div>
+    </div>
+    ${card?`<div id="swipe-btns">
+      <button class="nope-btn press" onclick="doSwipe('left')">✕</button>
+      <button class="pause-btn pl" onclick="goTo('select')">Pause</button>
+      <button class="like-btn press" onclick="doSwipe('right')">❤️</button>
+    </div>`:''}
+  </div>`);
+
+  // Hintergrundkarte mit Bild befüllen
+  if(bg&&bg.p){
+    const bgEl=document.getElementById('bg-card');
+    if(bgEl){const img=makeCardImg(IMG+bg.p);bgEl.appendChild(img);}
+  }
+
+  // Hauptkarte einbauen
+  buildCardEl(card);
+}
+
+function buildCardEl(card){
+  const slot=document.getElementById('card-slot');
+  if(!slot)return;
+  slot.innerHTML='';
+
+  if(!card){
+    slot.innerHTML=`<div style="position:absolute;inset:10px;display:flex;align-items:center;justify-content:center">
+      <div style="text-align:center;background:#111115;border:1px solid #2A2A32;border-radius:20px;padding:28px 24px">
+        <div style="font-size:36px;margin-bottom:11px;color:#4A4A50">✦</div>
+        <div class="serif" style="font-size:22px;margin-bottom:5px;color:#F2EEE4">Alle gesehen!</div>
+        <div style="font-size:13px;color:#8A8780;font-weight:300;margin-bottom:18px">Starte von vorne!</div>
+        <button class="small-btn press" onclick="resetRestart()">Von vorne starten</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  const el=document.createElement('div');
+  el.id='main-card';
+  el.className='card card-main card-in';
+
+  // Placeholder (immer sichtbar bis Bild geladen)
+  const ph=document.createElement('div');
+  ph.className='card-placeholder';
+  ph.textContent='🎬';
+  el.appendChild(ph);
+
+  // Bild mit fade-in
+  if(card.p){
+    const img=makeCardImg(IMG+card.p,()=>{ph.style.opacity='0';});
+    el.appendChild(img);
+  }
+
+  // Gradient
+  const grad=document.createElement('div');
+  grad.className='card-gradient';
+  el.appendChild(grad);
+
+  // Stamps
+  el.insertAdjacentHTML('beforeend',`
+    <div id="like-stamp" class="stamp">LIKE ✓</div>
+    <div id="nope-stamp" class="stamp">NOPE ✗</div>
+  `);
+
+  // Info
+  const yr=card.y||'';
+  el.insertAdjacentHTML('beforeend',`
+    <div class="card-info">
+      ${provHTML(card.pr)}
+      <div class="serif" style="font-size:26px;font-weight:400;line-height:1.2;color:#F9F5EC;margin-bottom:6px;text-shadow:0 1px 8px rgba(0,0,0,.7)">${esc(card.t)}</div>
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px">
+        <span style="font-size:13px;font-weight:600;color:#C9A84C">★ ${card.r?card.r.toFixed(1):'–'}</span>
+        <span style="color:rgba(255,255,255,.2)">·</span>
+        <span style="font-size:12px;color:rgba(255,255,255,.5);font-weight:300">${yr}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,.35);background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:2px 7px">${card.tp==='movie'?'FILM':'SERIE'}</span>
+      </div>
+      ${genHTML(card.g)}
+    </div>
+  `);
+
+  slot.appendChild(el);
+  initDrag();
+  // Nächste Bilder vorausladen
+  preloadImages(S.queue.slice(1,6));
+}
+
+function renderMatches(){
+  const cards=S.matches.length===0
+    ?`<div style="text-align:center;padding:70px 0;color:#8A8780">
+        <div style="font-size:40px;margin-bottom:12px;color:#4A4A50">✦</div>
+        <div class="serif" style="font-size:20px;color:#F2EEE4;margin-bottom:5px">Noch keine Matches</div>
+        <div style="font-size:13px;font-weight:300">Fangt an zu swipen!</div>
+      </div>`
+    :`<div class="matches-grid">${S.matches.map(m=>{
+        const prow=(m.providers||m.pr||[]).slice(0,2).map(p=>`<span class="pbadge" style="background:${PROV[p.id||p.provider_id]?.c||'#555'}">${esc(p.n||p.provider_name||'')}</span>`).join('');
+        const tp=(m._type||m.tp)==='movie'?'Film':'Serie';
+        const r=(m.vote_average||m.r||0).toFixed(1);
+        return`<div class="match-card fade-in">
+          ${(m.poster_path||m.p)?`<img src="${IMG}${m.poster_path||m.p}" loading="lazy" onerror="this.style.display='none'">`:`<div style="aspect-ratio:2/3;background:#222228;display:flex;align-items:center;justify-content:center;font-size:32px">🎬</div>`}
+          <div style="padding:9px 10px 11px">
+            <div style="font-size:12px;font-weight:600;line-height:1.35;margin-bottom:3px;color:#F2EEE4">${esc(m.title||m.name||m.t||'')}</div>
+            <div style="font-size:10px;color:#4A4A50;font-weight:300;margin-bottom:${prow?'5':'0'}px">★ ${r} · ${tp}</div>
+            ${prow?`<div style="display:flex;gap:4px;flex-wrap:wrap">${prow}</div>`:''}
+          </div>
+        </div>`;
+      }).join('')}</div>`;
+
+  setHTML(`<div style="width:100%;max-width:420px;height:100%;display:flex;flex-direction:column">
+    <div style="padding:16px 18px 13px;display:flex;align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid #1E1E24;background:#0C0C0F">
+      <button class="pl" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#8A8780;padding:4px;line-height:1;flex-shrink:0" onclick="backFromMatches()">←</button>
+      <div>
+        <h2 class="serif" style="font-size:22px;font-weight:400;color:#F2EEE4">Eure Matches</h2>
+        <div style="font-size:11px;color:#4A4A50;font-weight:300">${S.matches.length} gemeinsame ${S.matches.length===1?'Auswahl':'Auswahlen'}</div>
+      </div>
+    </div>
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:13px 13px 22px">${cards}</div>
+  </div>`);
+}
+
+function showMatch(m){
+  const ov=document.getElementById('match-overlay');
+  const prow=(m.pr||m.providers||[]).map(p=>`<span class="pbadge" style="background:${PROV[p.id||p.provider_id]?.c||'#555'}">${esc(p.n||p.provider_name||'')}</span>`).join('');
+  ov.innerHTML=`<div class="match-pop" style="text-align:center;max-width:300px">
+    <div style="font-size:50px;margin-bottom:3px;animation:pulse 1.1s ease infinite;display:inline-block">❤️</div>
+    <h2 class="serif" style="font-size:36px;font-weight:400;color:#F2EEE4;line-height:1.1;margin-bottom:5px">It's a Match</h2>
+    <div style="width:34px;height:1px;background:#C9A84C;margin:0 auto 13px;opacity:.6"></div>
+    <p style="color:#8A8780;font-size:13px;font-weight:300;margin-bottom:20px;line-height:1.6">Ihr mögt beide diesen Titel!</p>
+    ${m.p||m.poster_path?`<img src="${IMG}${m.p||m.poster_path}" style="width:110px;height:165px;object-fit:cover;border-radius:13px;display:block;margin:0 auto 12px;border:1px solid rgba(201,168,76,.22);box-shadow:0 0 28px rgba(201,168,76,.18)" onerror="this.style.display='none'">`:''}
+    <div class="serif" style="font-size:20px;font-weight:400;color:#F2EEE4;margin-bottom:9px">${esc(m.t||m.title||m.name||'')}</div>
+    ${prow?`<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:20px">${prow}</div>`:''}
+    <button class="gold-btn press" style="max-width:200px;margin:0 auto;display:block" onclick="closeMatch()">Weiter swipen</button>
+  </div>`;
+  ov.classList.add('show');
+}
+
+// ══════════════════════════════════════════════════════════
+// GLOBAL ACTIONS
+// ══════════════════════════════════════════════════════════
+function render(){
+  switch(S.screen){
+    case'loading':renderLoading();break;
+    case'names':renderNames();break;
+    case'select':renderSelect();break;
+    case'swipe':renderSwipe();break;
+    case'matches':renderMatches();break;
+  }
+}
+function goTo(sc){S.screen=sc;render();}
+function backFromMatches(){S.screen=S.queue.length?'swipe':'select';render();}
+function setMedia(m){S.media=m;renderSelect();}
+function saveNames(){
+  const p1=document.getElementById('n1')?.value?.trim()||'Spieler 1';
+  const p2=document.getElementById('n2')?.value?.trim()||'Spieler 2';
+  S.names={p1,p2};S.nameEdit={p1,p2};save();S.screen='select';render();
+}
+function startPlayer(p){
+  S.player=p;buildQueue();S.screen='swipe';render();
+  setTimeout(()=>{
+    fetchTmdbBg(S.media==='tv'?'tv':'movie');
+    if(S.media==='both')fetchTmdbBg('tv');
+  },800);
+}
+function resetRestart(){
+  if(S.player==='p1')S.p1Seen=new Set();else S.p2Seen=new Set();
+  buildQueue();renderSwipe();
+}
+function closeMatch(){
+  S.newMatch=null;
+  const ov=document.getElementById('match-overlay');
+  if(ov){ov.classList.remove('show');ov.innerHTML='';}
+}
+
+// ══════════════════════════════════════════════════════════
+// START
+// ══════════════════════════════════════════════════════════
+load();
+render();
+</script>
+</body>
+</html>

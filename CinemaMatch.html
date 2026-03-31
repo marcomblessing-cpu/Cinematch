@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>CinemaMatch</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0C0C0F;height:100%;overflow:hidden;-webkit-font-smoothing:antialiased;font-family:'DM Sans',sans-serif;color:#F2EEE4}
+button,input{font-family:inherit}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#2A2A32;border-radius:2px}
+#app{height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;position:relative;user-select:none;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes cardIn{from{opacity:0;transform:scale(.95) translateY(22px)}to{opacity:1;transform:none}}
+@keyframes matchPop{0%{opacity:0;transform:scale(.5)}65%{transform:scale(1.04)}100%{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.16)}}
+.fade-up{animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both}
+.fade-in{animation:fadeIn .3s ease both}
+.card-in{animation:cardIn .38s cubic-bezier(.22,1,.36,1) both}
+.match-pop{animation:matchPop .5s cubic-bezier(.22,1,.36,1) both}
+.press{transition:transform .12s ease,opacity .12s ease;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.press:active{transform:scale(.92)!important;opacity:.7}
+.pl{-webkit-tap-highlight-color:transparent}
+.pl:active{opacity:.55}
+.serif{font-family:'Cormorant Garamond',serif}
+input:focus{outline:1px solid rgba(201,168,76,.35);outline-offset:0}
+input::placeholder{color:#4A4A50}
+.spinner{width:28px;height:28px;border:1.5px solid #2A2A32;border-top-color:#C9A84C;border-radius:50%;animation:spin .9s linear infinite;display:inline-block}
+
+/* ── Screens ── */
+.screen{width:100%;max-width:420px;padding:0 22px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:13px 16px 6px;flex-shrink:0}
+.icon-btn{display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer;flex-shrink:0;transition:transform .12s ease,opacity .12s ease}
+.icon-btn:active{transform:scale(.9);opacity:.7}
+
+/* ── Card ── */
+#card-stage{flex:1;position:relative;padding:4px 14px 0;overflow:hidden}
+#main-card{position:absolute;inset:14px;border-radius:24px;overflow:hidden;background:#18181D;cursor:grab;touch-action:none;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+#main-card.grabbing{cursor:grabbing}
+#main-card img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+#bg-card{position:absolute;inset:14px;border-radius:24px;overflow:hidden;transform:scale(.94) translateY(10px);opacity:.38;background:#18181D;pointer-events:none}
+#bg-card img{width:100%;height:100%;object-fit:cover}
+.card-gradient{position:absolute;inset:0;background:linear-gradient(to top,rgba(6,6,10,.97) 0%,rgba(6,6,10,.52) 42%,transparent 68%);pointer-events:none}
+.card-info{position:absolute;bottom:0;left:0;right:0;padding:14px 18px 18px;pointer-events:none}
+.stamp{position:absolute;top:24px;border:2.5px solid;border-radius:9px;padding:5px 14px;font-size:18px;font-weight:700;transform:rotate(-13deg);opacity:0;transition:opacity .06s;letter-spacing:1.5px;pointer-events:none}
+#like-stamp{left:20px;color:#4ADE80;border-color:#4ADE80;background:rgba(74,222,128,.14)}
+#nope-stamp{right:20px;color:#F87171;border-color:#F87171;background:rgba(248,113,113,.14);transform:rotate(13deg)}
+
+/* ── Badges ── */
+.provider-badge{font-size:10px;font-weight:600;color:#fff;border-radius:5px;padding:3px 8px;display:inline-block;line-height:1.4}
+.genre-tag{font-size:11px;color:rgba(255,255,255,.4);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:2px 9px;display:inline-block;line-height:1.5}
+.provider-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px}
+.genre-row{display:flex;gap:5px;flex-wrap:wrap}
+.meta-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px}
+
+/* ── Buttons ── */
+.gold-btn{background:linear-gradient(135deg,#C9A84C,#A88A38);color:#0C0C0F;border:none;border-radius:13px;padding:13px 20px;font-size:15px;font-weight:500;cursor:pointer;width:100%}
+.ghost-btn{background:transparent;color:#8A8780;border:1px solid #2A2A32;border-radius:13px;padding:13px 20px;font-size:15px;font-weight:500;cursor:pointer;width:100%}
+.tab-btn{flex:1;background:transparent;border:1px solid transparent;border-radius:10px;padding:9px 0;font-size:12px;font-weight:400;color:#8A8780;cursor:pointer;transition:all .18s}
+.tab-btn.active{background:#222228;border-color:#38383F;color:#F2EEE4;font-weight:600}
+.player-btn{display:flex;align-items:center;gap:14px;background:#111115;border:1px solid #2A2A32;border-radius:16px;padding:15px 16px;cursor:pointer;text-align:left;width:100%;transition:border-color .15s}
+.player-btn:hover{border-color:#38383F}
+.small-btn{background:linear-gradient(135deg,#C9A84C,#A88A38);color:#0C0C0F;border:none;border-radius:10px;padding:9px 20px;font-size:13px;font-weight:500;cursor:pointer}
+.topbar-btn{background:#111115;border:1px solid #2A2A32;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:300;color:#8A8780;cursor:pointer}
+.topbar-btn.gold{background:rgba(201,168,76,.10);border-color:rgba(201,168,76,.22);color:#C9A84C;font-weight:500}
+.match-badge{display:flex;align-items:center;gap:5px;background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.22);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:500;color:#C9A84C;cursor:pointer}
+.swipe-btns{display:flex;justify-content:center;align-items:center;gap:20px;padding:10px 20px calc(24px + env(safe-area-inset-bottom));flex-shrink:0}
+.nope-btn{width:62px;height:62px;border-radius:50%;background:#F87171;border:2px solid #ef4444;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-weight:700;box-shadow:0 4px 16px rgba(248,113,113,.35)}
+.like-btn{width:62px;height:62px;border-radius:50%;background:rgba(74,222,128,.15);border:2px solid rgba(74,222,128,.6);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 16px rgba(74,222,128,.15)}
+.pause-btn{background:transparent;border:1px solid #2A2A32;border-radius:10px;padding:9px 16px;font-size:11px;font-weight:300;color:#4A4A50;cursor:pointer;letter-spacing:.3px}
+
+/* ── Input ── */
+.input-field{width:100%;background:#222228;border:1px solid #1E1E24;border-radius:10px;padding:12px 14px;color:#F2EEE4;font-size:15px;font-weight:300}
+.card-box{background:#111115;border:1px solid #2A2A32;border-radius:16px;padding:22px;margin-bottom:14px}
+.label-sm{font-size:10px;letter-spacing:1.5px;color:#4A4A50;text-transform:uppercase;font-weight:500;margin-bottom:7px}
+
+/* ── Matches grid ── */
+.matches-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.match-card{background:#111115;border-radius:14px;overflow:hidden;border:1px solid #2A2A32}
+.match-card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}
+.match-card-body{padding:9px 10px 11px}
+
+/* ── Match overlay ── */
+#match-overlay{position:fixed;inset:0;background:rgba(10,10,13,.94);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:28px;animation:fadeIn .3s ease both}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="match-overlay" style="display:none"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  CINEMAMATCH — Standalone HTML
+//  Einfach im Browser öffnen. Kein Server, kein Internet nötig.
+// ════════════════════════════════════════════════════════════
+
+const API_KEY = "3cb2c4540c82c05ee68159ecf369d2b2";
+const TMDB    = "https://api.themoviedb.org/3";
+const IMG     = "https://image.tmdb.org/t/p/w780";
+
+const PROV = {
+  8:{n:"Netflix",c:"#E50914"},
+  119:{n:"Prime",c:"#1399FF"},
+  9:{n:"Amazon",c:"#00A8E0"},
+  337:{n:"Disney+",c:"#1A2DDB"},
+  2:{n:"Apple TV+",c:"#2C2C2E"},
+  29:{n:"Sky",c:"#0072C6"},
+  531:{n:"Paramount+",c:"#0064FF"},
+  35:{n:"Rakuten",c:"#BF0000"},
+  39:{n:"WOW",c:"#00C49A"},
+};
+
+const GENRES = {
+  28:"Action",12:"Abenteuer",35:"Komödie",80:"Krimi",18:"Drama",
+  14:"Fantasy",27:"Horror",10749:"Romanze",878:"Sci-Fi",53:"Thriller",
+  10759:"Action",10765:"Sci-Fi & Fantasy",9648:"Mystery",37:"Western",
+  36:"Historie",10752:"Kriegsfilm",
+};
+
+// ── EINGEBAUTE FILMDATEN ─────────────────────────────────────
+// 195 Titel direkt eingebaut — funktioniert ohne Internet
+const DATA = [
+  // FILME
+  {id:299536,t:"Avengers: Infinity War",tp:"movie",p:"/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg",r:8.3,g:[12,28,878],y:"2018",pr:[{id:119,n:"Prime"}]},
+  {id:299534,t:"Avengers: Endgame",tp:"movie",p:"/or06FN3Dka5tukK1e9sl16pB3iy.jpg",r:8.4,g:[12,28,878],y:"2019",pr:[{id:119,n:"Prime"}]},
+  {id:157336,t:"Interstellar",tp:"movie",p:"/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",r:8.4,g:[12,18,878],y:"2014",pr:[{id:8,n:"Netflix"}]},
+  {id:496243,t:"Parasite",tp:"movie",p:"/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg",r:8.5,g:[35,18,53],y:"2019",pr:[{id:119,n:"Prime"}]},
+  {id:155,t:"The Dark Knight",tp:"movie",p:"/qJ2tW6WMUDux911r6m7haRef0WH.jpg",r:8.5,g:[28,80,18],y:"2008",pr:[{id:119,n:"Prime"}]},
+  {id:122,t:"Der Herr der Ringe: Die Rückkehr des Königs",tp:"movie",p:"/rCzpDGLbOoPwLjy3OAm5NUPOTrC.jpg",r:8.9,g:[12,14,28],y:"2003",pr:[{id:119,n:"Prime"}]},
+  {id:680,t:"Pulp Fiction",tp:"movie",p:"/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg",r:8.5,g:[53,80],y:"1994",pr:[{id:119,n:"Prime"}]},
+  {id:278,t:"Die Verurteilten",tp:"movie",p:"/lyQBXzOQSuE59IsHyhrp0qIiPAz.jpg",r:8.7,g:[18,80],y:"1994",pr:[]},
+  {id:550,t:"Fight Club",tp:"movie",p:"/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",r:8.4,g:[18,53],y:"1999",pr:[]},
+  {id:13,t:"Forrest Gump",tp:"movie",p:"/arw2vcBveWOVZr6pxd9XTd1TdQa.jpg",r:8.5,g:[35,18,10749],y:"1994",pr:[{id:119,n:"Prime"}]},
+  {id:424,t:"Schindlers Liste",tp:"movie",p:"/sF1U4EUQS8YHUYjNl3pMGNIQyr0.jpg",r:8.9,g:[18,36,10752],y:"1993",pr:[{id:119,n:"Prime"}]},
+  {id:603,t:"Matrix",tp:"movie",p:"/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",r:8.2,g:[28,878],y:"1999",pr:[{id:119,n:"Prime"}]},
+  {id:68718,t:"Django Unchained",tp:"movie",p:"/7oWY8VDWW7thTzWh3OKYRkWAc8p.jpg",r:8.4,g:[18,37],y:"2012",pr:[{id:8,n:"Netflix"}]},
+  {id:244786,t:"Whiplash",tp:"movie",p:"/7fn624j5lj3xTme2SgiLCeuedmO.jpg",r:8.4,g:[18,9648],y:"2014",pr:[{id:8,n:"Netflix"}]},
+  {id:146233,t:"Prisoners",tp:"movie",p:"/o4oUjp3jo9pFGi4L9rBmxQNmFUh.jpg",r:8.1,g:[18,9648,53],y:"2013",pr:[]},
+  {id:324857,t:"Spider-Man: A New Universe",tp:"movie",p:"/iiZZdoQBEYBv6id8su7ImL0oCbD.jpg",r:8.4,g:[12,28,16],y:"2018",pr:[{id:8,n:"Netflix"}]},
+  {id:438631,t:"Dune",tp:"movie",p:"/d5NXSklXo0qyIYkgV94XAgMIckC.jpg",r:7.8,g:[878,12],y:"2021",pr:[{id:119,n:"Prime"}]},
+  {id:661374,t:"Dune: Part Two",tp:"movie",p:"/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",r:8.2,g:[878,12,28],y:"2024",pr:[{id:9,n:"Amazon"}]},
+  {id:872585,t:"Oppenheimer",tp:"movie",p:"/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",r:8.2,g:[18,36,10752],y:"2023",pr:[{id:9,n:"Amazon"}]},
+  {id:569094,t:"Spider-Man: Across the Spider-Verse",tp:"movie",p:"/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",r:8.4,g:[28,12],y:"2023",pr:[{id:8,n:"Netflix"}]},
+  {id:346698,t:"Barbie",tp:"movie",p:"/iuFNMS8vlzmxuWhayo0AkfiHxnb.jpg",r:7.0,g:[35,12,14],y:"2023",pr:[{id:119,n:"Prime"}]},
+  {id:315162,t:"Puss in Boots: The Last Wish",tp:"movie",p:"/kuf6dutpsT0vSVehic3EZIqkOBt.jpg",r:8.0,g:[12,35],y:"2022",pr:[{id:8,n:"Netflix"}]},
+  {id:475557,t:"Joker",tp:"movie",p:"/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg",r:8.2,g:[80,53,18],y:"2019",pr:[{id:119,n:"Prime"}]},
+  {id:361743,t:"Top Gun: Maverick",tp:"movie",p:"/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",r:8.2,g:[28,18],y:"2022",pr:[{id:531,n:"Paramount+"}]},
+  {id:414906,t:"The Batman",tp:"movie",p:"/74xTEgt7R36Fpooo50r9T25onhq.jpg",r:7.8,g:[28,9648,80],y:"2022",pr:[{id:119,n:"Prime"}]},
+  {id:637014,t:"Everything Everywhere All at Once",tp:"movie",p:"/w3LxiVYdWWRvEVdn5RYq6jIqkb1.jpg",r:8.0,g:[28,12,35],y:"2022",pr:[{id:119,n:"Prime"}]},
+  {id:76600,t:"Avatar: The Way of Water",tp:"movie",p:"/t6HIqrRAclMCA60NsSmeqe9RmNV.jpg",r:7.6,g:[28,12,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+  {id:245891,t:"John Wick",tp:"movie",p:"/fZPSd91yGE9fCcCe6OoQr6E3Bev.jpg",r:7.4,g:[28,53],y:"2014",pr:[{id:119,n:"Prime"}]},
+  {id:603692,t:"John Wick: Chapter 4",tp:"movie",p:"/vZloFAK7NmvMGKE7VkF5UHaz0I.jpg",r:7.8,g:[28,53],y:"2023",pr:[{id:119,n:"Prime"}]},
+  {id:447365,t:"Guardians of the Galaxy Vol. 3",tp:"movie",p:"/r2J02Z2OpNTctfOSN1Ydgd2xknI.jpg",r:7.9,g:[28,878,35],y:"2023",pr:[{id:337,n:"Disney+"}]},
+  {id:324786,t:"Hacksaw Ridge",tp:"movie",p:"/tCkFhoCYW2mxHHkBrv1fRMehfKd.jpg",r:8.1,g:[18,10752,36],y:"2016",pr:[]},
+  {id:508442,t:"Soul",tp:"movie",p:"/hm58Jw4Lw8OIeECIq5qyPYhAeRJ.jpg",r:8.0,g:[12,35],y:"2020",pr:[{id:337,n:"Disney+"}]},
+  {id:150540,t:"Alles steht Kopf",tp:"movie",p:"/aAmfIX3TT40zUHGcCKrlOZRKC7u.jpg",r:8.1,g:[35,12],y:"2015",pr:[{id:337,n:"Disney+"}]},
+  {id:354912,t:"Coco",tp:"movie",p:"/gGEsBPAijhVUFoiNpgZXqRVWJt2.jpg",r:8.3,g:[12,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+  {id:10681,t:"WALL·E",tp:"movie",p:"/hbhFnRzzg6ZDmm8YAmxBnQ3lQ6a.jpg",r:8.4,g:[12,878],y:"2008",pr:[{id:337,n:"Disney+"}]},
+  {id:14160,t:"Oben",tp:"movie",p:"/ljsZTbVsrQSqZgWeep2B1QiDKuh.jpg",r:8.3,g:[12,35],y:"2009",pr:[{id:337,n:"Disney+"}]},
+  {id:9806,t:"Die Unglaublichen",tp:"movie",p:"/2LqaLgk4Z226KkgPJuiOQ58wvrm.jpg",r:7.8,g:[12,28],y:"2004",pr:[{id:337,n:"Disney+"}]},
+  {id:260513,t:"Die Unglaublichen 2",tp:"movie",p:"/9slExD0oGnQF0GsxWaBxZM3m4OI.jpg",r:7.6,g:[12,28],y:"2018",pr:[{id:337,n:"Disney+"}]},
+  {id:503736,t:"The Adam Project",tp:"movie",p:"/wFjboE0aFZNbZOSoaIwbQKleZcs.jpg",r:7.0,g:[28,12,878],y:"2022",pr:[{id:8,n:"Netflix"}]},
+  {id:512195,t:"Red Notice",tp:"movie",p:"/wdE6ewaKZHr62bLqCn7A2DiGShm.jpg",r:6.9,g:[28,35],y:"2021",pr:[{id:8,n:"Netflix"}]},
+  {id:399566,t:"Godzilla vs. Kong",tp:"movie",p:"/pgqgaUx1cJb5oZQQ5v0tNARCeBp.jpg",r:7.6,g:[28,878,12],y:"2021",pr:[{id:119,n:"Prime"}]},
+  {id:823464,t:"Godzilla x Kong: The New Empire",tp:"movie",p:"/z1p34vh7dEOnLDmyCrlUVLuoDzd.jpg",r:6.8,g:[28,878,12],y:"2024",pr:[{id:119,n:"Prime"}]},
+  {id:560057,t:"Free Guy",tp:"movie",p:"/xmbU4JTUm8rsdtn7Y3Fcm30GpeT.jpg",r:7.1,g:[28,35,878],y:"2021",pr:[{id:337,n:"Disney+"}]},
+  {id:559,t:"Ocean's Eleven",tp:"movie",p:"/o0h76DVXvk5OKjmNez5YY0GODC2.jpg",r:7.7,g:[80,35],y:"2001",pr:[]},
+  {id:19995,t:"Avatar",tp:"movie",p:"/jRXYjXNq0Cs2TcJjLkki24MLp7u.jpg",r:7.5,g:[28,12,14],y:"2009",pr:[{id:337,n:"Disney+"}]},
+  {id:135397,t:"Jurassic World",tp:"movie",p:"/jjBgi2r5cRt36xF6iNUYhOrOsd9.jpg",r:7.0,g:[28,12,878],y:"2015",pr:[{id:119,n:"Prime"}]},
+  {id:207703,t:"Kingsman",tp:"movie",p:"/oAISjx6DvR2yUn9dxj00vP15RMj.jpg",r:7.7,g:[28,12,35],y:"2014",pr:[{id:8,n:"Netflix"}]},
+  {id:293660,t:"Deadpool",tp:"movie",p:"/fSRb7vyIP8rQpL0I47P3qUsEKX3.jpg",r:7.6,g:[28,12,35],y:"2016",pr:[{id:337,n:"Disney+"}]},
+  {id:533535,t:"Deadpool & Wolverine",tp:"movie",p:"/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",r:7.8,g:[28,12,35],y:"2024",pr:[{id:337,n:"Disney+"}]},
+  {id:1022789,t:"Alles steht Kopf 2",tp:"movie",p:"/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg",r:7.6,g:[35,12],y:"2024",pr:[{id:337,n:"Disney+"}]},
+  {id:1184918,t:"Der wilde Roboter",tp:"movie",p:"/wTnV0ANeg90kcNSxNVMVuFiEhOB.jpg",r:8.3,g:[12,35],y:"2024",pr:[]},
+  {id:762441,t:"A Quiet Place: Tag Eins",tp:"movie",p:"/yrpPYKijwdMHyTGIOd1iK1h0Jev.jpg",r:7.0,g:[27,878,53],y:"2024",pr:[{id:531,n:"Paramount+"}]},
+  {id:945961,t:"Alien: Romulus",tp:"movie",p:"/b33nnKl1GSFbao4l3fZDDqsMx0F.jpg",r:7.2,g:[27,878,53],y:"2024",pr:[{id:337,n:"Disney+"}]},
+  {id:653346,t:"Kingdom of the Planet of the Apes",tp:"movie",p:"/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg",r:7.3,g:[878,28,12],y:"2024",pr:[{id:337,n:"Disney+"}]},
+  {id:718821,t:"Twisters",tp:"movie",p:"/pjnD08FlMAIXsfOLKQbvmO0YVMJ.jpg",r:7.2,g:[28,12],y:"2024",pr:[{id:119,n:"Prime"}]},
+  {id:786892,t:"Furiosa",tp:"movie",p:"/iADOJ8Zymht2JPMoy3R7xceZprc.jpg",r:7.6,g:[28,12,878],y:"2024",pr:[{id:119,n:"Prime"}]},
+  {id:573435,t:"Bad Boys: Ride or Die",tp:"movie",p:"/oGyt6KQKFAP68aRFl0Bv3dUQPcO.jpg",r:7.2,g:[28,35,80],y:"2024",pr:[{id:8,n:"Netflix"}]},
+  {id:677179,t:"Creed III",tp:"movie",p:"/cvsXj3I9Q2iyyIo95AecSd1tad7.jpg",r:7.0,g:[28,18],y:"2023",pr:[{id:119,n:"Prime"}]},
+  {id:726209,t:"Leave the World Behind",tp:"movie",p:"/6m3bD3XqMkAn73UWpDVbDEkBhca.jpg",r:6.7,g:[18,9648,53],y:"2023",pr:[{id:8,n:"Netflix"}]},
+  {id:629542,t:"Uncharted",tp:"movie",p:"/sqLowacltbZLoCa0qZfKX9iLhyu.jpg",r:7.0,g:[28,12],y:"2022",pr:[{id:8,n:"Netflix"}]},
+  {id:385687,t:"Fast X",tp:"movie",p:"/fiVW06jE7z9YnO4trhaMEdclSiC.jpg",r:7.1,g:[28,12],y:"2023",pr:[{id:119,n:"Prime"}]},
+  {id:335983,t:"Venom",tp:"movie",p:"/2uNW4WbgBXL25BAbXGLnLqX71Sw.jpg",r:6.8,g:[28,878,35],y:"2018",pr:[{id:8,n:"Netflix"}]},
+  {id:580489,t:"Venom 2",tp:"movie",p:"/rjkmN1dniUHVYAtwuV3Tji7FsDO.jpg",r:6.9,g:[28,878,35],y:"2021",pr:[{id:8,n:"Netflix"}]},
+  {id:460465,t:"Mortal Kombat",tp:"movie",p:"/xGuOF1T3WmPsAcQEQJfnG7Ud9f8.jpg",r:7.3,g:[28,14,12],y:"2021",pr:[{id:119,n:"Prime"}]},
+  {id:432413,t:"The Old Guard",tp:"movie",p:"/cjGd3KzEjElYnSI6MFROfAWKMyf.jpg",r:6.9,g:[28,12,878],y:"2020",pr:[{id:8,n:"Netflix"}]},
+  {id:399579,t:"Alita: Battle Angel",tp:"movie",p:"/xRWht48C2V8XNfzvWSbmryfQkQs.jpg",r:7.3,g:[28,878,12],y:"2019",pr:[{id:337,n:"Disney+"}]},
+  {id:816692,t:"Tenet",tp:"movie",p:"/k68nPLbIST6NP96JmTxmZijZcpZ.jpg",r:7.3,g:[28,878,12],y:"2020",pr:[{id:119,n:"Prime"}]},
+  {id:502356,t:"The Super Mario Bros. Movie",tp:"movie",p:"/qNBAXBIQlnOThrVvA6mA2B5ggkR.jpg",r:7.0,g:[12,35],y:"2023",pr:[{id:119,n:"Prime"}]},
+  {id:140607,t:"Star Wars: Das Erwachen der Macht",tp:"movie",p:"/wqnLdwVXoBjKibFRR5U3y0aDUhs.jpg",r:7.3,g:[12,28,878],y:"2015",pr:[{id:337,n:"Disney+"}]},
+  {id:330459,t:"Rogue One: A Star Wars Story",tp:"movie",p:"/i0yw1mFbB7sNGHCs7EXZPzFkdA1.jpg",r:7.5,g:[12,28,878],y:"2016",pr:[{id:337,n:"Disney+"}]},
+  {id:22,t:"Pirates of the Caribbean",tp:"movie",p:"/z8onk7LV9Mmw6zKz4hT6pzzvmvl.jpg",r:7.7,g:[12,14,28],y:"2003",pr:[{id:337,n:"Disney+"}]},
+  {id:671,t:"Harry Potter und der Stein der Weisen",tp:"movie",p:"/wuMc08IPKEatf9rnMNXvIDxqP4W.jpg",r:7.9,g:[12,14,35],y:"2001",pr:[{id:119,n:"Prime"}]},
+  {id:674,t:"Harry Potter und der Feuerkelch",tp:"movie",p:"/fECBqgd9ZqS5hNEMuiMxBn5bMm4.jpg",r:7.8,g:[12,14,35],y:"2005",pr:[{id:119,n:"Prime"}]},
+  {id:675,t:"Harry Potter und der Orden des Phönix",tp:"movie",p:"/5aOyriVtHzHJZCBb0vKbWHtMRLM.jpg",r:7.7,g:[12,14,35],y:"2007",pr:[{id:119,n:"Prime"}]},
+  {id:284053,t:"Thor: Ragnarok",tp:"movie",p:"/rzRwTcFvttcN1ZpX2xv4j3tSdJu.jpg",r:7.7,g:[28,12,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+  {id:271110,t:"Captain America: Civil War",tp:"movie",p:"/rAGiXaUfPzY7CDEyNKUofk3Kw2e.jpg",r:7.8,g:[28,12,878],y:"2016",pr:[{id:337,n:"Disney+"}]},
+  {id:634649,t:"Spider-Man: No Way Home",tp:"movie",p:"/uJYYizSuA9Y3DCs0qS4qWvHfZg4.jpg",r:8.1,g:[28,12,878],y:"2021",pr:[{id:8,n:"Netflix"}]},
+  {id:284054,t:"Black Panther",tp:"movie",p:"/uxzzxijgPIY7slzFvMotPv8wjKA.jpg",r:7.4,g:[28,12,878],y:"2018",pr:[{id:337,n:"Disney+"}]},
+  {id:566525,t:"Shang-Chi",tp:"movie",p:"/1BIoJGKbXjdFDAqUEiA2VHqkK1Z.jpg",r:7.5,g:[28,12,878],y:"2021",pr:[{id:337,n:"Disney+"}]},
+  {id:1726,t:"Iron Man",tp:"movie",p:"/78lPtwv72eTNqFW9COBV0l5uV1m.jpg",r:7.6,g:[28,878,12],y:"2008",pr:[{id:337,n:"Disney+"}]},
+  {id:447277,t:"Arielle, die Meerjungfrau",tp:"movie",p:"/ym1dxyOk4jFcSl4Q2zmRrA5BEEN.jpg",r:7.0,g:[14,10749,35],y:"2023",pr:[{id:337,n:"Disney+"}]},
+  {id:420818,t:"Der König der Löwen",tp:"movie",p:"/2bXbqYdUdNVa8VIWXVfclP2ICtT.jpg",r:7.0,g:[12,18],y:"2019",pr:[{id:337,n:"Disney+"}]},
+  {id:321612,t:"Die Schöne und das Biest",tp:"movie",p:"/tWqifoYuwLETmmasnGHO7xBjEtt.jpg",r:7.1,g:[14,10749,35],y:"2017",pr:[{id:337,n:"Disney+"}]},
+  {id:960704,t:"Indiana Jones: Das Rad des Schicksals",tp:"movie",p:"/Af4bXE63pVsb2FtbW8uYIyPBadD.jpg",r:6.6,g:[12,28],y:"2023",pr:[{id:337,n:"Disney+"}]},
+  {id:385128,t:"F9: The Fast Saga",tp:"movie",p:"/bOFaAXmWWXC3Rbv4u4uM9ZSzRXP.jpg",r:7.2,g:[28,12],y:"2021",pr:[{id:119,n:"Prime"}]},
+  {id:426063,t:"Transformers: Rise of the Beasts",tp:"movie",p:"/gPbM0MK8CP8A174rmUwGsADNYKD.jpg",r:6.7,g:[28,878,12],y:"2023",pr:[{id:531,n:"Paramount+"}]},
+  {id:675353,t:"Sonic the Hedgehog 2",tp:"movie",p:"/6DrHO1icfSQ87Q9RMcPeKAn3ufT.jpg",r:7.2,g:[12,35,28],y:"2022",pr:[{id:531,n:"Paramount+"}]},
+  {id:436270,t:"Black Adam",tp:"movie",p:"/3zXceNTtyj5FLjwQXuPvLYK5YYL.jpg",r:6.8,g:[28,12,878],y:"2022",pr:[{id:119,n:"Prime"}]},
+  {id:522627,t:"The Suicide Squad",tp:"movie",p:"/gb3HYEJGctNS6d0MXXOqSgNfqEV.jpg",r:7.3,g:[28,12,35],y:"2021",pr:[{id:119,n:"Prime"}]},
+  {id:618353,t:"Doctor Strange im Multiversum",tp:"movie",p:"/9Gtg2DzBhmYamXBS1hKAhiwbBKS.jpg",r:6.9,g:[28,12,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+  {id:505642,t:"Black Panther: Wakanda Forever",tp:"movie",p:"/sv1xJUazXeYqALzczSZ3O6nkH75.jpg",r:7.2,g:[28,12,878],y:"2022",pr:[{id:337,n:"Disney+"}]},
+  {id:1011985,t:"Kung Fu Panda 4",tp:"movie",p:"/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg",r:6.8,g:[12,35],y:"2024",pr:[{id:119,n:"Prime"}]},
+  {id:519182,t:"Ich - Einfach unverbesserlich 4",tp:"movie",p:"/wWba3TaojhK7NdycRhoQpsG0FaH.jpg",r:6.9,g:[35,12],y:"2024",pr:[]},
+  {id:1241982,t:"Moana 2",tp:"movie",p:"/yh64qGQM2aibFT5jkJdpPWWJbJq.jpg",r:7.0,g:[12,35],y:"2024",pr:[{id:337,n:"Disney+"}]},
+
+  // SERIEN
+  {id:1396,t:"Breaking Bad",tp:"tv",p:"/ggFHVNu6YYI5L9pCfOacjizRGt.jpg",r:9.5,g:[18,80],y:"2008",pr:[{id:8,n:"Netflix"}]},
+  {id:1399,t:"Game of Thrones",tp:"tv",p:"/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",r:9.3,g:[10759,18,14],y:"2011",pr:[{id:29,n:"Sky"}]},
+  {id:66732,t:"Stranger Things",tp:"tv",p:"/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",r:8.7,g:[878,9648,18],y:"2016",pr:[{id:8,n:"Netflix"}]},
+  {id:60059,t:"Better Call Saul",tp:"tv",p:"/fC2HDm5t0kHl7mTm7jxMR31b7by.jpg",r:8.8,g:[18,80],y:"2015",pr:[{id:8,n:"Netflix"}]},
+  {id:63174,t:"Lucifer",tp:"tv",p:"/4EYPN5mVIhKLfxGruy7Dy41dTVn.jpg",r:8.5,g:[18,9648,80],y:"2016",pr:[{id:8,n:"Netflix"}]},
+  {id:1988,t:"Peaky Blinders",tp:"tv",p:"/vUUqzWa2LnHIVqkaKVn3nyfVnBs.jpg",r:8.8,g:[18,80],y:"2013",pr:[{id:8,n:"Netflix"}]},
+  {id:87108,t:"Chernobyl",tp:"tv",p:"/hlLXt2tOPT6RRnjiUmoxyG1LTFi.jpg",r:9.4,g:[18,36],y:"2019",pr:[{id:29,n:"Sky"}]},
+  {id:100088,t:"The Last of Us",tp:"tv",p:"/uKvVjHNqB5VmOrdxqAt2F7J78ED.jpg",r:8.6,g:[18,878,10759],y:"2023",pr:[{id:29,n:"Sky"}]},
+  {id:95403,t:"Squid Game",tp:"tv",p:"/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg",r:8.0,g:[18,10759,9648],y:"2021",pr:[{id:8,n:"Netflix"}]},
+  {id:94997,t:"House of the Dragon",tp:"tv",p:"/z2yahl2uefxDCl0nogcRBstwruJ.jpg",r:8.4,g:[18,10759,14],y:"2022",pr:[{id:29,n:"Sky"}]},
+  {id:120089,t:"Wednesday",tp:"tv",p:"/9PFonBhy4cQy7Jz20NpMygczOkv.jpg",r:8.7,g:[35,9648,18],y:"2022",pr:[{id:8,n:"Netflix"}]},
+  {id:79744,t:"The Boys",tp:"tv",p:"/2zmTngn1tYC1AvfnrFLhxeD82hz.jpg",r:8.5,g:[878,10759,35],y:"2019",pr:[{id:119,n:"Prime"}]},
+  {id:82856,t:"The Mandalorian",tp:"tv",p:"/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg",r:8.5,g:[878,28,12],y:"2019",pr:[{id:337,n:"Disney+"}]},
+  {id:114461,t:"Andor",tp:"tv",p:"/59SVNwLfoMnZPPB6ukW6dlPxAdI.jpg",r:8.4,g:[878,28,12],y:"2022",pr:[{id:337,n:"Disney+"}]},
+  {id:71712,t:"The Good Doctor",tp:"tv",p:"/6tfT03sGp9k4c0J3dypjrI8TSAI.jpg",r:8.6,g:[18],y:"2017",pr:[]},
+  {id:63351,t:"Vikings",tp:"tv",p:"/bQLrHIW9eqBsAFn1yaRqoXNdwMY.jpg",r:8.5,g:[10759,18],y:"2013",pr:[{id:119,n:"Prime"}]},
+  {id:76479,t:"The Witcher",tp:"tv",p:"/zrPpUlehQaBf8YX2NrVrKK8IEpf.jpg",r:8.1,g:[878,14,10759],y:"2019",pr:[{id:8,n:"Netflix"}]},
+  {id:84773,t:"Herr der Ringe: Die Ringe der Macht",tp:"tv",p:"/mYLOqiStMxDK3fYZFirgrMt8z5d.jpg",r:7.3,g:[878,14,12],y:"2022",pr:[{id:119,n:"Prime"}]},
+  {id:197374,t:"Reacher",tp:"tv",p:"/odVv1sqVs0KxHTiDKzsGQHMhxH.jpg",r:8.1,g:[10759,80],y:"2022",pr:[{id:119,n:"Prime"}]},
+  {id:90462,t:"Cobra Kai",tp:"tv",p:"/6POBOBKRe1c6Q1MBFhhAnkKVKCz.jpg",r:8.2,g:[28,18,10759],y:"2018",pr:[{id:8,n:"Netflix"}]},
+  {id:71446,t:"Haus des Geldes",tp:"tv",p:"/reEMJA1uzscCbkpeRJeTT2bjqUp.jpg",r:8.3,g:[80,9648,18],y:"2017",pr:[{id:8,n:"Netflix"}]},
+  {id:90228,t:"Bridgerton",tp:"tv",p:"/luoKpgVwi1E5nQsi7W0UuKHu2Rq.jpg",r:8.1,g:[18,10749],y:"2020",pr:[{id:8,n:"Netflix"}]},
+  {id:75006,t:"The Crown",tp:"tv",p:"/6XRgfcXbevJWBbOCqvGmfHV3M4.jpg",r:8.2,g:[18,36],y:"2016",pr:[{id:8,n:"Netflix"}]},
+  {id:63247,t:"Westworld",tp:"tv",p:"/lJSzSA5yWFIHLLrGVUWPMFYLfR.jpg",r:8.1,g:[878,18,9648],y:"2016",pr:[{id:29,n:"Sky"}]},
+  {id:4011,t:"Lost",tp:"tv",p:"/og6S0aTZU6YUJAbqxeKjCa3kY1E.jpg",r:8.0,g:[18,9648,878],y:"2004",pr:[]},
+  {id:4607,t:"Lost",tp:"tv",p:"/og6S0aTZU6YUJAbqxeKjCa3kY1E.jpg",r:8.0,g:[18,9648],y:"2004",pr:[]},
+  {id:1402,t:"The Walking Dead",tp:"tv",p:"/rqeYMLryjcawh2JeRpCVUDXYM5b.jpg",r:8.1,g:[18,878,10759],y:"2010",pr:[]},
+  {id:1430,t:"Prison Break",tp:"tv",p:"/5E1BhkCgjLBlqx557Z5oAFbELDv.jpg",r:8.3,g:[18,80,10759],y:"2005",pr:[{id:337,n:"Disney+"}]},
+  {id:4011,t:"Lost",tp:"tv",p:"/og6S0aTZU6YUJAbqxeKjCa3kY1E.jpg",r:8.0,g:[18,9648],y:"2004",pr:[]},
+  {id:1622,t:"Supernatural",tp:"tv",p:"/KoYWXbnYuS3b0GyQPkbuexlVK9.jpg",r:8.4,g:[18,9648,14],y:"2005",pr:[]},
+  {id:84958,t:"Loki",tp:"tv",p:"/kEl2t3OhXc3Zb9FBh1AuYzRTgZp.jpg",r:8.1,g:[878,28,12],y:"2021",pr:[{id:337,n:"Disney+"}]},
+  {id:85271,t:"WandaVision",tp:"tv",p:"/glKDfE6btIRcmhl7XHEGqdalAeQ.jpg",r:7.9,g:[878,35,18],y:"2021",pr:[{id:337,n:"Disney+"}]},
+  {id:202555,t:"The Gentlemen",tp:"tv",p:"/cSIRCFcBfDmDCwHU9SFiaTFYbzv.jpg",r:8.0,g:[18,80,35],y:"2024",pr:[{id:8,n:"Netflix"}]},
+  {id:65495,t:"The Expanse",tp:"tv",p:"/AwfpmbCFPCKa3tRFIFT26tjpSVP.jpg",r:8.5,g:[878,18,9648],y:"2015",pr:[{id:119,n:"Prime"}]},
+  {id:136311,t:"The Diplomat",tp:"tv",p:"/uo4VKZJ2pANnKLsFuALQOxBBuXV.jpg",r:7.7,g:[18,9648,53],y:"2023",pr:[{id:8,n:"Netflix"}]},
+  {id:199666,t:"The Night Agent",tp:"tv",p:"/huv2KkU2WfObqd2mbnhGGRiUVlh.jpg",r:7.7,g:[18,10759,9648],y:"2023",pr:[{id:8,n:"Netflix"}]},
+  {id:104430,t:"Manifest",tp:"tv",p:"/bLfFuHiPHFnGITGO1JwX4kxaJM3.jpg",r:7.6,g:[18,9648,878],y:"2018",pr:[{id:8,n:"Netflix"}]},
+  {id:114410,t:"Yellowstone",tp:"tv",p:"/1Xt1yGTZlMNHMzQrBvlgAiZvdX3.jpg",r:8.3,g:[18,10759,37],y:"2018",pr:[]},
+  {id:108978,t:"Emily in Paris",tp:"tv",p:"/9SJJbJ20kYMYMKhVBjuqnOlEStG.jpg",r:7.5,g:[18,35,10749],y:"2020",pr:[{id:8,n:"Netflix"}]},
+  {id:1408,t:"Dr. House",tp:"tv",p:"/3GRe7lbXiI2beYAoJEqiD3fWnDQ.jpg",r:8.6,g:[18,9648],y:"2004",pr:[]},
+  {id:4011,t:"24",tp:"tv",p:"/og6S0aTZU6YUJAbqxeKjCa3kY1E.jpg",r:8.0,g:[18,10759,53],y:"2001",pr:[]},
+  {id:215770,t:"One Piece (Live Action)",tp:"tv",p:"/2rmK7mnchw9Xr3XdiAwdt39xAx2.jpg",r:8.3,g:[10759,35,14],y:"2023",pr:[{id:8,n:"Netflix"}]},
+];
+
+// Duplikate per ID entfernen
+const seenIds = new Set();
+const TITLES = DATA.filter(m => { if(seenIds.has(m.id)) return false; seenIds.add(m.id); return true; });
+
+// ── STATE ────────────────────────────────────────────────────
+const S = {
+  screen: "loading",
+  names: {p1:"Spieler 1", p2:"Spieler 2"},
+  nameEdit: {p1:"", p2:""},
+  player: "p1",
+  queue: [],
+  p1Liked: [], p2Liked: [],
+  p1Seen: new Set(), p2Seen: new Set(),
+  matches: [],
+  newMatch: null,
+  media: "movie",
+  drag: {on:false, x:0, sx:0},
+  animating: false,
+  extraTitles: [],
+};
+
+// ── LOCALSTORAGE ─────────────────────────────────────────────
+function save() {
+  try {
+    localStorage.setItem("cm_names",   JSON.stringify(S.names));
+    localStorage.setItem("cm_p1l",     JSON.stringify(S.p1Liked));
+    localStorage.setItem("cm_p2l",     JSON.stringify(S.p2Liked));
+    localStorage.setItem("cm_p1s",     JSON.stringify([...S.p1Seen]));
+    localStorage.setItem("cm_p2s",     JSON.stringify([...S.p2Seen]));
+    localStorage.setItem("cm_matches", JSON.stringify(S.matches));
+  } catch(e) {}
+}
+
+function load() {
+  try {
+    const ns = localStorage.getItem("cm_names");
+    const p1l = localStorage.getItem("cm_p1l");
+    const p2l = localStorage.getItem("cm_p2l");
+    const p1s = localStorage.getItem("cm_p1s");
+    const p2s = localStorage.getItem("cm_p2s");
+    const ms  = localStorage.getItem("cm_matches");
+    if (ns)  { const n=JSON.parse(ns); S.names=n; S.nameEdit={...n}; }
+    if (p1l) S.p1Liked = JSON.parse(p1l);
+    if (p2l) S.p2Liked = JSON.parse(p2l);
+    if (p1s) S.p1Seen  = new Set(JSON.parse(p1s));
+    if (p2s) S.p2Seen  = new Set(JSON.parse(p2s));
+    if (ms)  S.matches  = JSON.parse(ms);
+    S.screen = ns ? "select" : "names";
+  } catch(e) {
+    S.screen = "names";
+  }
+}
+
+// ── QUEUE ────────────────────────────────────────────────────
+function buildQueue() {
+  const seen = S.player === "p1" ? S.p1Seen : S.p2Seen;
+  const all  = [...TITLES, ...S.extraTitles];
+  let pool;
+
+  if (S.media === "both") {
+    const mv = all.filter(m => m.tp==="movie" && !seen.has(String(m.id)));
+    const tv = all.filter(m => m.tp==="tv"    && !seen.has(String(m.id)));
+    pool = [];
+    for (let i=0; i<Math.max(mv.length, tv.length); i++) {
+      if (mv[i]) pool.push(mv[i]);
+      if (tv[i]) pool.push(tv[i]);
+    }
+  } else {
+    pool = all.filter(m => m.tp===S.media && !seen.has(String(m.id)));
+  }
+
+  // Wenn alles gesehen: Seen zurücksetzen und von vorne
+  if (!pool.length) {
+    if (S.player==="p1") S.p1Seen=new Set(); else S.p2Seen=new Set();
+    return buildQueue();
+  }
+
+  S.queue = pool;
+}
+
+// ── TMDB NACHLADEN (Hintergrund) ─────────────────────────────
+let tmdbPageM = 1, tmdbPageT = 1;
+function fetchTmdbBg(type) {
+  const page = type==="movie" ? tmdbPageM++ : tmdbPageT++;
+  const date = type==="movie" ? "primary_release_date.gte=2000-01-01" : "first_air_date.gte=2000-01-01";
+  const url  = `${TMDB}/discover/${type}?api_key=${API_KEY}&language=de-DE&sort_by=popularity.desc&vote_count.gte=200&without_genres=16&${date}&page=${page}`;
+
+  fetch(url).then(r=>r.ok?r.json():null).then(d=>{
+    if (!d || !d.results) return;
+    const existing = new Set(TITLES.map(m=>m.id));
+    const fresh = d.results
+      .filter(m => !existing.has(m.id))
+      .map(m => ({
+        id: m.id,
+        t: m.title || m.name || "",
+        tp: type,
+        p: m.poster_path || "",
+        r: parseFloat((m.vote_average||0).toFixed(1)),
+        g: (m.genre_ids||[]).slice(0,4),
+        y: (m.release_date||m.first_air_date||"").slice(0,4),
+        pr: [],
+      }));
+    S.extraTitles.push(...fresh);
+    // Provider für die ersten 5 nachladen
+    fresh.slice(0,5).forEach(m => fetchProviderBg(type, m.id));
+  }).catch(()=>{});
+}
+
+function fetchProviderBg(type, id) {
+  fetch(`${TMDB}/${type}/${id}/watch/providers?api_key=${API_KEY}`)
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{
+      if (!d) return;
+      const flatrate = d.results?.DE?.flatrate || [];
+      const providers = flatrate.slice(0,4).map(p=>({id:p.provider_id, n:PROV[p.provider_id]?.n||p.provider_name}));
+      if (!providers.length) return;
+      // In queue und extraTitles updaten
+      S.queue = S.queue.map(m => String(m.id)===String(id) ? {...m, pr:providers} : m);
+      S.extraTitles = S.extraTitles.map(m => String(m.id)===String(id) ? {...m, pr:providers} : m);
+      // Karte neu rendern falls oben
+      if (S.queue[0] && String(S.queue[0].id)===String(id)) renderCard();
+    }).catch(()=>{});
+}
+
+// ── SWIPE ────────────────────────────────────────────────────
+function doSwipe(dir) {
+  if (!S.queue.length || S.animating) return;
+  const item = S.queue[0];
+  const id   = String(item.id);
+  const isP1 = S.player === "p1";
+
+  S.animating = true;
+
+  // Karte animieren
+  const card = document.getElementById("main-card");
+  if (card) {
+    const tx = dir==="right" ? 650 : -650;
+    const rot = dir==="right" ? 18 : -18;
+    card.style.transition = "transform .36s cubic-bezier(.22,1,.36,1), opacity .36s ease";
+    card.style.transform  = `translateX(${tx}px) rotate(${rot}deg)`;
+    card.style.opacity    = "0";
+  }
+
+  // Match prüfen
+  let matched = null;
+  if (dir === "right") {
+    if (isP1) {
+      S.p1Liked.push(id);
+      if (S.p2Liked.includes(id)) { matched = item; S.matches.push(item); }
+    } else {
+      S.p2Liked.push(id);
+      if (S.p1Liked.includes(id)) { matched = item; S.matches.push(item); }
+    }
+  }
+
+  if (isP1) S.p1Seen.add(id); else S.p2Seen.add(id);
+  save();
+
+  setTimeout(() => {
+    S.animating = false;
+    S.queue.shift();
+
+    // Nachfüllen aus TMDB wenn Queue dünn
+    if (S.queue.length < 5) {
+      fetchTmdbBg(S.media==="tv" ? "tv" : "movie");
+      if (S.media==="both") fetchTmdbBg("tv");
+    }
+
+    if (matched) {
+      S.newMatch = matched;
+      renderSwipeScreen();
+      showMatchOverlay(matched);
+    } else {
+      renderSwipeScreen();
+    }
+  }, 360);
+}
+
+// ── DRAG ─────────────────────────────────────────────────────
+function initDrag() {
+  const card = document.getElementById("main-card");
+  if (!card) return;
+
+  let startX = 0;
+
+  function onStart(e) {
+    if (S.animating) return;
+    startX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    S.drag = {on:true, x:0, sx:startX};
+    card.style.transition = "none";
+    card.classList.add("grabbing");
+  }
+
+  function onMove(e) {
+    if (!S.drag.on) return;
+    const cx = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    const dx = cx - startX;
+    S.drag.x = dx;
+    card.style.transform = `translateX(${dx}px) rotate(${dx * 0.05}deg)`;
+    const likeOp = Math.min(1, Math.max(0, dx/60));
+    const nopeOp = Math.min(1, Math.max(0, -dx/60));
+    const ls = document.getElementById("like-stamp");
+    const ns = document.getElementById("nope-stamp");
+    if (ls) ls.style.opacity = likeOp;
+    if (ns) ns.style.opacity = nopeOp;
+  }
+
+  function onEnd() {
+    if (!S.drag.on) return;
+    S.drag.on = false;
+    card.classList.remove("grabbing");
+    if      (S.drag.x >  70) doSwipe("right");
+    else if (S.drag.x < -70) doSwipe("left");
+    else {
+      card.style.transition = "transform .2s ease";
+      card.style.transform  = "translateX(0) rotate(0)";
+      const ls = document.getElementById("like-stamp");
+      const ns = document.getElementById("nope-stamp");
+      if (ls) ls.style.opacity = 0;
+      if (ns) ns.style.opacity = 0;
+      S.drag = {on:false,x:0,sx:0};
+    }
+  }
+
+  card.addEventListener("mousedown",  onStart);
+  card.addEventListener("mousemove",  onMove);
+  card.addEventListener("mouseup",    onEnd);
+  card.addEventListener("mouseleave", onEnd);
+  card.addEventListener("touchstart", onStart, {passive:true});
+  card.addEventListener("touchmove",  onMove,  {passive:true});
+  card.addEventListener("touchend",   onEnd);
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function providerBadges(pr) {
+  if (!pr || !pr.length) return "";
+  return `<div class="provider-row">${pr.map(p=>`<span class="provider-badge" style="background:${PROV[p.id]?.c||'#555'}">${p.n||""}</span>`).join("")}</div>`;
+}
+
+function genreTags(g) {
+  if (!g || !g.length) return "";
+  const tags = g.slice(0,3).filter(id=>GENRES[id]).map(id=>`<span class="genre-tag">${GENRES[id]}</span>`);
+  return tags.length ? `<div class="genre-row">${tags.join("")}</div>` : "";
+}
+
+function logoHTML(compact) {
+  const sz = compact ? 26 : 34;
+  const fs = compact ? 19 : 26;
+  return `<div style="display:flex;align-items:center;gap:${compact?7:10}px;user-select:none">
+    <div style="width:${sz}px;height:${sz}px;border-radius:${compact?7:10}px;background:linear-gradient(140deg,#C9A84C,#A88A38);display:flex;align-items:center;justify-content:center;font-size:${compact?13:17}px;flex-shrink:0;box-shadow:0 2px 14px rgba(201,168,76,.3)">🎬</div>
+    <span class="serif" style="font-size:${fs}px;font-weight:400;color:#F2EEE4;letter-spacing:.2px;line-height:1">CinemaMatch</span>
+  </div>`;
+}
+
+// ── RENDER SCREENS ───────────────────────────────────────────
+const app = document.getElementById("app");
+
+function showScreen(html) {
+  app.innerHTML = html;
+}
+
+function renderLoading() {
+  showScreen(`<div class="fade-in" style="display:flex;flex-direction:column;align-items:center;gap:22px">
+    ${logoHTML(false)}
+    <div class="spinner"></div>
+  </div>`);
+}
+
+function renderNames() {
+  showScreen(`<div class="fade-up screen" style="max-width:360px">
+    <div style="text-align:center;margin-bottom:36px">
+      ${logoHTML(false)}
+      <p style="margin-top:12px;font-size:13px;color:#8A8780;line-height:1.7;font-weight:300">Wie heißt ihr?</p>
+    </div>
+    <div class="card-box">
+      <div style="margin-bottom:14px">
+        <div class="label-sm">Spieler 1</div>
+        <input id="inp-p1" class="input-field" placeholder="Dein Name…" value="${escHtml(S.nameEdit.p1)}">
+      </div>
+      <div>
+        <div class="label-sm">Spieler 2</div>
+        <input id="inp-p2" class="input-field" placeholder="Ihr Name…" value="${escHtml(S.nameEdit.p2)}">
+      </div>
+    </div>
+    <button class="gold-btn press" onclick="saveNames()">Weiter →</button>
+  </div>`);
+  document.getElementById("inp-p1").focus();
+  document.getElementById("inp-p1").addEventListener("keydown", e=>{ if(e.key==="Enter") saveNames(); });
+  document.getElementById("inp-p2").addEventListener("keydown", e=>{ if(e.key==="Enter") saveNames(); });
+}
+
+function renderSelect() {
+  const matchBtn = S.matches.length > 0
+    ? `<button class="match-badge press" onclick="goTo('matches')">✦ ${S.matches.length} ${S.matches.length===1?"Match":"Matches"}</button>`
+    : `<div></div>`;
+
+  const tabs = ["movie","tv","both"].map(t => {
+    const labels = {movie:"🎬 Filme", tv:"📺 Serien", both:"Beides"};
+    return `<button class="tab-btn ${S.media===t?"active":""} pl" onclick="setMedia('${t}')">${labels[t]}</button>`;
+  }).join("");
+
+  const players = ["p1","p2"].map((p,i) => {
+    const liked = (p==="p1"?S.p1Liked:S.p2Liked).length;
+    const seen  = (p==="p1"?S.p1Seen:S.p2Seen).size;
+    const grad  = i===0 ? "linear-gradient(135deg,#C9A84C,#8A6A28)" : "linear-gradient(135deg,#6C7BC4,#3D4890)";
+    return `<button class="player-btn press" onclick="startPlayer('${p}')">
+      <div style="width:44px;height:44px;border-radius:50%;background:${grad};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;border:1px solid #2A2A32">${i===0?"🍿":"🎬"}</div>
+      <div style="flex:1;text-align:left">
+        <div style="font-size:15px;font-weight:600;color:#F2EEE4;margin-bottom:2px">${escHtml(S.names[p])}</div>
+        <div style="font-size:11px;color:#4A4A50;font-weight:300">${liked} Likes · ${seen} gesehen</div>
+      </div>
+      <span style="color:#4A4A50;font-size:17px">›</span>
+    </button>`;
+  }).join("");
+
+  showScreen(`<div class="fade-up screen">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:26px">
+      ${logoHTML(true)}
+      ${matchBtn}
+    </div>
+    <div style="background:#111115;border:1px solid #1E1E24;border-radius:14px;padding:4px;display:flex;gap:3px;margin-bottom:16px">
+      ${tabs}
+    </div>
+    <div class="label-sm" style="margin-bottom:9px">Wer ist dran?</div>
+    <div style="display:flex;flex-direction:column;gap:10px">${players}</div>
+    <button class="pl" style="width:100%;margin-top:13px;background:transparent;border:none;padding:9px;font-size:12px;color:#4A4A50;cursor:pointer;font-weight:300" onclick="goTo('names')">✎ Namen ändern</button>
+  </div>`);
+}
+
+function renderSwipeScreen() {
+  const card   = S.queue[0];
+  const bgCard = S.queue[1];
+  const mediaLabel = S.media==="movie" ? "Filme" : S.media==="tv" ? "Serien" : "Alles";
+  const matchGold  = S.matches.length > 0;
+
+  app.innerHTML = `
+    <div style="width:100%;max-width:430px;height:100dvh;display:flex;flex-direction:column">
+      <div class="topbar">
+        <button class="topbar-btn press" onclick="goTo('select')">←</button>
+        <div style="text-align:center">
+          <div style="font-size:14px;font-weight:600;color:#F2EEE4">${escHtml(S.names[S.player])}</div>
+          <div style="font-size:11px;color:#4A4A50;font-weight:300;margin-top:1px">${mediaLabel}</div>
+        </div>
+        <button class="topbar-btn ${matchGold?"gold":""} press" onclick="goTo('matches')">✦ ${S.matches.length}</button>
+      </div>
+
+      <div id="card-stage">
+        ${bgCard && bgCard.p ? `<div id="bg-card"><img src="${IMG}${bgCard.p}" loading="eager" onerror="this.style.display='none'"></div>` : ""}
+        ${renderCardHTML(card)}
+      </div>
+
+      ${card ? `
+      <div class="swipe-btns">
+        <button class="nope-btn press" onclick="doSwipe('left')">✕</button>
+        <button class="pause-btn pl" onclick="goTo('select')">Pause</button>
+        <button class="like-btn press" onclick="doSwipe('right')">❤️</button>
+      </div>` : ""}
+    </div>`;
+
+  if (card) initDrag();
+}
+
+function renderCard() {
+  // Nur die Karte updaten ohne ganzen Screen neu zu rendern
+  const stage = document.getElementById("card-stage");
+  if (!stage) return;
+  const card = S.queue[0];
+  const cardEl = document.getElementById("main-card");
+  if (cardEl) cardEl.outerHTML = renderCardHTML(card);
+  if (card) initDrag();
+}
+
+function renderCardHTML(card) {
+  if (!card) {
+    return `<div style="position:absolute;inset:14px;display:flex;align-items:center;justify-content:center">
+      <div style="text-align:center;background:#111115;border:1px solid #2A2A32;border-radius:20px;padding:30px 26px">
+        <div style="font-size:38px;margin-bottom:12px;color:#4A4A50">✦</div>
+        <div class="serif" style="font-size:22px;margin-bottom:6px;color:#F2EEE4">Alle gesehen!</div>
+        <div style="font-size:13px;color:#8A8780;font-weight:300;margin-bottom:20px">Starte von vorne!</div>
+        <button class="small-btn press" onclick="resetAndRestart()">Von vorne starten</button>
+      </div>
+    </div>`;
+  }
+
+  const yr = card.y || "";
+  const poster = card.p ? `<img src="${IMG}${card.p}" loading="eager" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=\"width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:72px;color:#38383F;background:#18181D\">🎬</div>')">` : "";
+
+  return `<div id="main-card" class="card-in">
+    ${poster}
+    <div class="card-gradient"></div>
+    <div id="like-stamp" class="stamp">LIKE ✓</div>
+    <div id="nope-stamp" class="stamp">NOPE ✗</div>
+    <div class="card-info">
+      ${providerBadges(card.pr)}
+      <div class="serif" style="font-size:27px;font-weight:400;line-height:1.2;color:#F9F5EC;margin-bottom:7px;text-shadow:0 1px 8px rgba(0,0,0,.6)">${escHtml(card.t||"")}</div>
+      <div class="meta-row">
+        <span style="font-size:13px;font-weight:600;color:#C9A84C">★ ${card.r ? card.r.toFixed(1) : "–"}</span>
+        <span style="color:rgba(255,255,255,.2)">·</span>
+        <span style="font-size:12px;color:rgba(255,255,255,.5);font-weight:300">${yr}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,.35);background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:2px 7px">${card.tp==="movie"?"FILM":"SERIE"}</span>
+      </div>
+      ${genreTags(card.g)}
+    </div>
+  </div>`;
+}
+
+function renderMatches() {
+  const matchCards = S.matches.length === 0
+    ? `<div style="text-align:center;padding:70px 0;color:#8A8780">
+        <div style="font-size:40px;margin-bottom:13px;color:#4A4A50">✦</div>
+        <div class="serif" style="font-size:20px;color:#F2EEE4;margin-bottom:5px">Noch keine Matches</div>
+        <div style="font-size:13px;font-weight:300">Fangt an zu swipen!</div>
+      </div>`
+    : `<div class="matches-grid">${S.matches.map(m => {
+        const poster = m.poster_path||m.p ? `<img src="${IMG}${m.poster_path||m.p}" onerror="this.style.display='none'">` : `<div style="aspect-ratio:2/3;background:#222228;display:flex;align-items:center;justify-content:center;font-size:34px">🎬</div>`;
+        const prow = (m.providers||m.pr||[]).slice(0,2).map(p=>`<span class="provider-badge" style="background:${PROV[p.id||p.provider_id]?.c||'#555'}">${p.n||p.provider_name||""}</span>`).join("");
+        const type = (m._type||m.tp)==="movie" ? "Film" : "Serie";
+        const rating = (m.vote_average||m.r||0).toFixed(1);
+        return `<div class="match-card fade-in">
+          ${poster}
+          <div class="match-card-body">
+            <div style="font-size:12px;font-weight:600;line-height:1.35;margin-bottom:3px;color:#F2EEE4">${escHtml(m.title||m.name||m.t||"")}</div>
+            <div style="font-size:10px;color:#4A4A50;font-weight:300;margin-bottom:${prow?"5":"0"}px">★ ${rating} · ${type}</div>
+            ${prow ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${prow}</div>` : ""}
+          </div>
+        </div>`;
+      }).join("")}</div>`;
+
+  showScreen(`<div style="width:100%;max-width:420px;height:100dvh;display:flex;flex-direction:column">
+    <div style="padding:16px 18px 13px;display:flex;align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid #1E1E24;background:#0C0C0F">
+      <button class="pl" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#8A8780;padding:4px;line-height:1" onclick="goBackFromMatches()">←</button>
+      <div>
+        <h2 class="serif" style="font-size:22px;font-weight:400;color:#F2EEE4">Eure Matches</h2>
+        <div style="font-size:11px;color:#4A4A50;font-weight:300">${S.matches.length} gemeinsame ${S.matches.length===1?"Auswahl":"Auswahlen"}</div>
+      </div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:13px 13px 22px">${matchCards}</div>
+  </div>`);
+}
+
+function showMatchOverlay(m) {
+  const ov = document.getElementById("match-overlay");
+  const prow = (m.pr||m.providers||[]).map(p=>`<span class="provider-badge" style="background:${PROV[p.id||p.provider_id]?.c||'#555'}">${p.n||p.provider_name||""}</span>`).join("");
+  ov.style.display = "flex";
+  ov.innerHTML = `<div class="match-pop" style="text-align:center;max-width:300px">
+    <div style="font-size:52px;margin-bottom:4px;animation:pulse 1.1s ease infinite;display:inline-block">❤️</div>
+    <h2 class="serif" style="font-size:38px;font-weight:400;color:#F2EEE4;line-height:1.1;margin-bottom:5px">It's a Match</h2>
+    <div style="width:36px;height:1px;background:#C9A84C;margin:0 auto 14px;opacity:.6"></div>
+    <p style="color:#8A8780;font-size:13px;font-weight:300;margin-bottom:22px;line-height:1.6">Ihr mögt beide diesen Titel!</p>
+    ${m.p||m.poster_path ? `<img src="${IMG}${m.p||m.poster_path}" style="width:116px;height:174px;object-fit:cover;border-radius:14px;display:block;margin:0 auto 13px;border:1px solid rgba(201,168,76,.22);box-shadow:0 0 30px rgba(201,168,76,.2)">` : ""}
+    <div class="serif" style="font-size:21px;font-weight:400;color:#F2EEE4;margin-bottom:10px">${escHtml(m.t||m.title||m.name||"")}</div>
+    ${prow ? `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:22px">${prow}</div>` : ""}
+    <button class="gold-btn press" style="max-width:210px;margin:0 auto;display:block" onclick="closeMatch()">Weiter swipen</button>
+  </div>`;
+}
+
+// ── ACTIONS (global, von HTML aus aufrufbar) ──────────────────
+function escHtml(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function goTo(screen) {
+  S.screen = screen;
+  render();
+}
+
+function goBackFromMatches() {
+  // Zurück zum Swipe-Screen wenn wir gerade swipen
+  S.screen = S.player && S.queue.length ? "swipe" : "select";
+  render();
+}
+
+function setMedia(m) {
+  S.media = m;
+  renderSelect();
+}
+
+function saveNames() {
+  const p1 = document.getElementById("inp-p1")?.value?.trim() || "Spieler 1";
+  const p2 = document.getElementById("inp-p2")?.value?.trim() || "Spieler 2";
+  S.names = {p1, p2};
+  S.nameEdit = {p1, p2};
+  save();
+  S.screen = "select";
+  render();
+}
+
+function startPlayer(p) {
+  S.player = p;
+  buildQueue();
+  S.screen = "swipe";
+  render();
+  // TMDB im Hintergrund starten
+  setTimeout(()=>{
+    fetchTmdbBg(S.media==="tv" ? "tv" : "movie");
+    if (S.media==="both") fetchTmdbBg("tv");
+  }, 1000);
+}
+
+function resetAndRestart() {
+  if (S.player==="p1") S.p1Seen=new Set(); else S.p2Seen=new Set();
+  buildQueue();
+  renderSwipeScreen();
+}
+
+function closeMatch() {
+  S.newMatch = null;
+  document.getElementById("match-overlay").style.display = "none";
+}
+
+// ── MAIN RENDER ──────────────────────────────────────────────
+function render() {
+  switch(S.screen) {
+    case "loading": renderLoading();      break;
+    case "names":   renderNames();        break;
+    case "select":  renderSelect();       break;
+    case "swipe":   renderSwipeScreen();  break;
+    case "matches": renderMatches();      break;
+  }
+}
+
+// ── START ────────────────────────────────────────────────────
+load();
+render();
+</script>
+</body>
+</html>
