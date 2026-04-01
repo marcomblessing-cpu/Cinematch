@@ -627,99 +627,95 @@ function buildQueue() {
   preloadImages(pool.slice(0,10));
 }
 
-// ══════════════════════════════════════════════════════════
-// BILD-SYSTEM — Promise-basiert, wartet auf echtes Laden
-// ══════════════════════════════════════════════════════════
-// Map: posterPath → Promise<HTMLImageElement|null>
-const imgCache = new Map();
+// ══════════════════════════════════════════════════════════════════════
+// POSTER-SYSTEM — Garantiert immer ein passendes Poster
+//
+// Strategie:
+//  1. fetchVerifiedPath: TMDB-API-Call mit 5s Timeout → gibt TMDB-Pfad
+//     zurück oder fällt auf item.p zurück. Niemals null wenn item.p existiert.
+//  2. loadImgSizes: probiert 4 TMDB-Größen (w342→w500→w780→original) —
+//     schlägt eine Größe fehl (404), wird die nächste versucht.
+//  3. loadPoster: kein äußerer Timeout der null zurückgibt. Spinner bleibt
+//     bis ein Bild geladen ist oder alle Größen gescheitert sind.
+//  4. correctPaths: per "${tp}:${id}" indexiert, unabhängig von item.p und
+//     Objekt-Identität (fetchProviderBg spreizt Objekte → item.p-Updates
+//     gehen verloren, correctPaths nicht).
+// ══════════════════════════════════════════════════════════════════════
 
-// Lädt ein Bild und speichert das Promise — mehrfache Aufrufe
-// warten alle auf dasselbe Promise (kein Doppelt-Laden).
-// WICHTIG: Fehlgeschlagene Ladevorgänge werden NICHT gecacht —
-// ein Netzwerkfehler führt sonst zu permanent null für diesen Pfad.
-function loadImg(path) {
+const correctPaths = new Map(); // "${tp}:${id}" → poster_path
+const pathFetches  = new Map(); // "${tp}:${id}" → laufendes Promise
+const imgCache     = new Map(); // poster_path   → Promise<HTMLImageElement>
+
+// Schritt 1: Korrekten Poster-Pfad von TMDB holen (max 5s, dann Fallback)
+function fetchVerifiedPath(item) {
+  if (!item) return Promise.resolve(null);
+  const key = `${item.tp}:${item.id}`;
+  if (correctPaths.has(key)) return Promise.resolve(correctPaths.get(key));
+  if (pathFetches.has(key))  return pathFetches.get(key);
+
+  const apiFetch = fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => d?.poster_path || null)
+    .catch(() => null);
+
+  const p = Promise.race([apiFetch, new Promise(r => setTimeout(() => r(null), 5000))])
+    .then(path => {
+      // TMDB-Pfad oder Fallback auf hardcodierten Pfad — niemals null wenn möglich
+      const result = path || item.p || null;
+      if (result) correctPaths.set(key, result);
+      return result;
+    });
+
+  pathFetches.set(key, p);
+  return p;
+}
+
+// Schritt 2: Bild laden mit Fallback auf größere TMDB-Varianten
+const IMG_SIZES = ['w342', 'w500', 'w780', 'original'];
+
+function loadImgSizes(path) {
   if (!path) return Promise.resolve(null);
-  const url = IMG + path;
   if (imgCache.has(path)) return imgCache.get(path);
-  const p = new Promise(resolve => {
-    const img = new Image();
-    img.onload  = () => resolve(img);
-    img.onerror = () => { imgCache.delete(path); resolve(null); };
-    img.src = url;
-    if (img.complete && img.naturalWidth > 0) resolve(img);
-    if (img.complete && img.naturalWidth === 0) { imgCache.delete(path); resolve(null); }
+
+  function trySize(i) {
+    if (i >= IMG_SIZES.length) return Promise.resolve(null);
+    const url = `https://image.tmdb.org/t/p/${IMG_SIZES[i]}${path}`;
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => trySize(i + 1).then(resolve);
+      img.src = url;
+      if (img.complete && img.naturalWidth > 0) resolve(img);
+    });
+  }
+
+  const p = trySize(0).then(img => {
+    if (!img) imgCache.delete(path); // Fehlschläge nicht dauerhaft cachen
+    return img;
   });
   imgCache.set(path, p);
   return p;
 }
 
-// Timeout-Wrapper: max 8 Sekunden warten, dann null
-function loadImgTimeout(path, ms=8000) {
-  return Promise.race([
-    loadImg(path),
-    new Promise(r => setTimeout(()=>r(null), ms))
-  ]);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// POSTER-SYSTEM — Verifizierte Pfade per ID, unabhängig von item.p
-//
-// correctPaths:  "${tp}:${id}" → poster_path  (nur wenn TMDB bestätigt)
-// pathFetches:   "${tp}:${id}" → laufendes Promise (kein Doppel-Fetch)
-//
-// Warum separate Map statt item.p:
-//   fetchProviderBg() spreizt Queue-Objekte ({...m, pr:p}) → neue Objekte
-//   mit altem item.p. Updates auf alten Objekten gehen verloren.
-//   correctPaths ist per ID indexiert und von Objekt-Identität unabhängig.
-// ═══════════════════════════════════════════════════════════════════
-const correctPaths = new Map();
-const pathFetches  = new Map();
-
-function fetchVerifiedPath(item) {
-  if (!item?.id || !item?.tp) return Promise.resolve(null);
-  const key = `${item.tp}:${item.id}`;
-  if (correctPaths.has(key)) return Promise.resolve(correctPaths.get(key));
-  if (pathFetches.has(key))  return pathFetches.get(key);
-  const doFetch = () =>
-    fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => d?.poster_path || null)
-      .catch(() => null);
-  const p = doFetch().then(path => {
-    if (path) { correctPaths.set(key, path); return path; }
-    // Einmal nachversuchen nach 1s (z.B. bei Rate-Limit)
-    return new Promise(r => setTimeout(r, 1000)).then(doFetch).then(p2 => {
-      if (p2) correctPaths.set(key, p2);
-      return p2;
-    });
-  });
-  pathFetches.set(key, p);
-  return p;
-}
-
-// Lädt Poster — used verified path, nie direkt item.p als Quelle
-function loadPoster(item, ms=8000) {
+// Schritt 3: Kombiniert — verifizierter Pfad + robustes Laden
+// Kein äußerer Timeout der null zurückgibt. Spinner bleibt bis Bild da.
+function loadPoster(item) {
   if (!item) return Promise.resolve(null);
-  if (!item.id || !item.tp) return loadImgTimeout(item.p, ms);
-  const key = `${item.tp}:${item.id}`;
-  const known = correctPaths.get(key);
-  if (known) return loadImgTimeout(known, ms);
-  return Promise.race([
-    fetchVerifiedPath(item).then(path => loadImgTimeout(path || item.p, ms)),
-    new Promise(r => setTimeout(() => r(null), ms))
-  ]);
+  return fetchVerifiedPath(item).then(path => loadImgSizes(path));
 }
 
-// Wärmt Poster-Cache vor (TMDB-Pfad holen + Bild im Hintergrund laden)
+// Im Hintergrund vorbereiten (für nächste Karten)
 function warmPoster(item) {
   if (!item) return;
-  if (!item.id || !item.tp) { if (item.p) loadImg(item.p); return; }
-  fetchVerifiedPath(item).then(path => { if (path || item.p) loadImg(path || item.p); });
+  fetchVerifiedPath(item).then(path => { if (path) loadImgSizes(path); });
 }
 
 function preloadImages(items) {
   items.forEach(item => { if (item) warmPoster(item); });
 }
+
+// Legacy-Wrapper damit bestehende Aufrufe nicht brechen
+function loadImg(path) { return loadImgSizes(path); }
 
 // ══════════════════════════════════════════════════════════
 // TMDB NACHLADEN
@@ -1013,7 +1009,7 @@ function renderSwipe(){
   if(bg&&bg.p){
     const bgEl=document.getElementById('bg-card');
     if(bgEl){
-      loadPoster(bg, 5000).then(imgEl=>{
+      loadPoster(bg).then(imgEl=>{
         if(!imgEl||!document.getElementById('bg-card'))return;
         const img=document.createElement('img');
         img.className='card-img loaded';
@@ -1060,7 +1056,7 @@ function buildCardEl(card){
   }, 3000);
 
   // Warten bis Bild fertig geladen — dann Karte einblenden
-  loadPoster(card, 8000).then(imgEl => {
+  loadPoster(card).then(imgEl => {
     clearTimeout(slowTimer);
     // Slot noch gültig? Prüfe isConnected, nicht getElementById —
     // getElementById findet sonst den Slot eines neuen Renders, was
@@ -1203,7 +1199,7 @@ function startPlayer(p){
   // Erstes Bild laden, dann Screen wechseln — kein Placeholder
   const first = S.queue[0];
   if(first){
-    loadPoster(first, 8000).then(()=>{
+    loadPoster(first).then(()=>{
       S.screen='swipe';render();
     });
     // Gleichzeitig nächste Bilder starten
