@@ -628,94 +628,93 @@ function buildQueue() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// POSTER-SYSTEM — Garantiert immer ein passendes Poster
+// POSTER-SYSTEM
 //
-// Strategie:
-//  1. fetchVerifiedPath: TMDB-API-Call mit 5s Timeout → gibt TMDB-Pfad
-//     zurück oder fällt auf item.p zurück. Niemals null wenn item.p existiert.
-//  2. loadImgSizes: probiert 4 TMDB-Größen (w342→w500→w780→original) —
-//     schlägt eine Größe fehl (404), wird die nächste versucht.
-//  3. loadPoster: kein äußerer Timeout der null zurückgibt. Spinner bleibt
-//     bis ein Bild geladen ist oder alle Größen gescheitert sind.
-//  4. correctPaths: per "${tp}:${id}" indexiert, unabhängig von item.p und
-//     Objekt-Identität (fetchProviderBg spreizt Objekte → item.p-Updates
-//     gehen verloren, correctPaths nicht).
+// Kernprinzip: prefetchPosters() holt ALLE Poster-Pfade für die Queue
+// BEVOR die erste Karte gezeigt wird. Danach sind alle Pfade in
+// correctPaths — kein Async-Race während des Spielens möglich.
+//
+// fetchVerifiedPath: 3 Versuche, kein item.p-Fallback für Anzeige.
+//   Falsches Poster ist schlimmer als ein kurzer Ladescreen.
 // ══════════════════════════════════════════════════════════════════════
 
-const correctPaths = new Map(); // "${tp}:${id}" → poster_path
+const correctPaths = new Map(); // "${tp}:${id}" → verifizierter poster_path
 const pathFetches  = new Map(); // "${tp}:${id}" → laufendes Promise
-const imgCache     = new Map(); // poster_path   → Promise<HTMLImageElement>
+const imgCache     = new Map(); // url           → Promise<HTMLImageElement>
 
-// Schritt 1: Korrekten Poster-Pfad von TMDB holen (max 5s, dann Fallback)
+// TMDB-API-Call, bis zu 3 Versuche, speichert NUR bestätigte Pfade
 function fetchVerifiedPath(item) {
-  if (!item) return Promise.resolve(null);
+  if (!item?.id || !item?.tp) return Promise.resolve(null);
   const key = `${item.tp}:${item.id}`;
   if (correctPaths.has(key)) return Promise.resolve(correctPaths.get(key));
   if (pathFetches.has(key))  return pathFetches.get(key);
 
-  const apiFetch = fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}`)
-    .then(r => r.ok ? r.json() : null)
-    .then(d => d?.poster_path || null)
-    .catch(() => null);
+  function attempt(n) {
+    return fetch(`${BASE}/${item.tp}/${item.id}?api_key=${API}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.poster_path || null)
+      .catch(() => null)
+      .then(path => {
+        if (path) { correctPaths.set(key, path); return path; }
+        if (n > 0) return new Promise(r => setTimeout(r, 1500)).then(() => attempt(n - 1));
+        return null;
+      });
+  }
 
-  const p = Promise.race([apiFetch, new Promise(r => setTimeout(() => r(null), 5000))])
-    .then(path => {
-      // TMDB-Pfad oder Fallback auf hardcodierten Pfad — niemals null wenn möglich
-      const result = path || item.p || null;
-      if (result) correctPaths.set(key, result);
-      return result;
-    });
-
+  const p = attempt(2);
   pathFetches.set(key, p);
   return p;
 }
 
-// Schritt 2: Bild laden mit Fallback auf größere TMDB-Varianten
-const IMG_SIZES = ['w342', 'w500', 'w780', 'original'];
-
-function loadImgSizes(path) {
-  if (!path) return Promise.resolve(null);
-  if (imgCache.has(path)) return imgCache.get(path);
-
+// Bild laden — probiert w342 → w500 → w780 → original
+function loadImgPath(posterPath) {
+  if (!posterPath) return Promise.resolve(null);
+  const sizes = ['w342','w500','w780','original'];
   function trySize(i) {
-    if (i >= IMG_SIZES.length) return Promise.resolve(null);
-    const url = `https://image.tmdb.org/t/p/${IMG_SIZES[i]}${path}`;
-    return new Promise(resolve => {
+    if (i >= sizes.length) return Promise.resolve(null);
+    const url = `https://image.tmdb.org/t/p/${sizes[i]}${posterPath}`;
+    if (imgCache.has(url)) return imgCache.get(url);
+    const p = new Promise(resolve => {
       const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => trySize(i + 1).then(resolve);
+      img.onload  = () => { imgCache.set(url, Promise.resolve(img)); resolve(img); };
+      img.onerror = () => resolve(trySize(i + 1));
       img.src = url;
-      if (img.complete && img.naturalWidth > 0) resolve(img);
+      if (img.complete && img.naturalWidth > 0) { imgCache.set(url, Promise.resolve(img)); resolve(img); }
     });
+    return p;
   }
-
-  const p = trySize(0).then(img => {
-    if (!img) imgCache.delete(path); // Fehlschläge nicht dauerhaft cachen
-    return img;
-  });
-  imgCache.set(path, p);
-  return p;
+  return trySize(0);
 }
 
-// Schritt 3: Kombiniert — verifizierter Pfad + robustes Laden
-// Kein äußerer Timeout der null zurückgibt. Spinner bleibt bis Bild da.
+// Verifizierter Pfad + Bild laden
 function loadPoster(item) {
   if (!item) return Promise.resolve(null);
-  return fetchVerifiedPath(item).then(path => loadImgSizes(path));
+  const key = `${item.tp}:${item.id}`;
+  const known = correctPaths.get(key);
+  if (known) return loadImgPath(known);
+  return fetchVerifiedPath(item).then(path => loadImgPath(path));
 }
 
-// Im Hintergrund vorbereiten (für nächste Karten)
+// Hintergrund-Vorwärmen für nächste Karten
 function warmPoster(item) {
   if (!item) return;
-  fetchVerifiedPath(item).then(path => { if (path) loadImgSizes(path); });
+  fetchVerifiedPath(item).then(path => { if (path) loadImgPath(path); });
+}
+function preloadImages(items) { items.forEach(item => { if (item) warmPoster(item); }); }
+
+// Batch-Prefetch: holt Pfade für die ersten 30 Queue-Items VOR dem ersten Swipe
+// Batches von 8 um TMDB Rate-Limit (40 req/10s) zu respektieren
+function prefetchPosters(queue) {
+  const items = queue.slice(0, 30).filter(it => !correctPaths.has(`${it.tp}:${it.id}`));
+  const batches = [];
+  for (let i = 0; i < items.length; i += 8) batches.push(items.slice(i, i + 8));
+  return batches.reduce(
+    (chain, batch) => chain.then(() => Promise.all(batch.map(it => fetchVerifiedPath(it)))),
+    Promise.resolve()
+  );
 }
 
-function preloadImages(items) {
-  items.forEach(item => { if (item) warmPoster(item); });
-}
-
-// Legacy-Wrapper damit bestehende Aufrufe nicht brechen
-function loadImg(path) { return loadImgSizes(path); }
+function loadImg(path) { return loadImgPath(path); } // legacy
 
 // ══════════════════════════════════════════════════════════
 // TMDB NACHLADEN
@@ -1196,21 +1195,29 @@ function saveNames(){
 function startPlayer(p){
   S.player=p;
   buildQueue();
-  // Erstes Bild laden, dann Screen wechseln — kein Placeholder
-  const first = S.queue[0];
-  if(first){
-    loadPoster(first).then(()=>{
-      S.screen='swipe';render();
-    });
-    // Gleichzeitig nächste Bilder starten
-    preloadImages(S.queue.slice(1,10));
-  } else {
-    S.screen='swipe';render();
-  }
-  setTimeout(()=>{
-    fetchTmdbBg(S.media==='tv'?'tv':'movie');
-    if(S.media==='both')fetchTmdbBg('tv');
-  },1500);
+  if(!S.queue.length){ S.screen='swipe'; render(); return; }
+
+  // Lade-Screen zeigen während Poster-Pfade verifiziert werden
+  setHTML(`<div class="fade-in" style="display:flex;flex-direction:column;align-items:center;gap:18px">
+    ${logoHTML(false)}
+    <div class="spinner"></div>
+    <div style="font-size:12px;color:#4A4A50;font-weight:300">Poster werden geladen…</div>
+  </div>`);
+
+  // 1. Pfade für erste 30 Items per TMDB verifizieren
+  // 2. Erst danach Swipe-Screen zeigen → garantiert korrekte Poster
+  prefetchPosters(S.queue).then(() => {
+    // Erstes Bild wirklich laden, dann anzeigen
+    return loadPoster(S.queue[0]);
+  }).then(() => {
+    S.screen='swipe'; render();
+    // Restliche Bilder im Hintergrund vorbereiten
+    preloadImages(S.queue.slice(1, 15));
+    setTimeout(()=>{
+      fetchTmdbBg(S.media==='tv'?'tv':'movie');
+      if(S.media==='both')fetchTmdbBg('tv');
+    }, 2000);
+  });
 }
 function resetRestart(){
   if(S.player==='p1')S.p1Seen=new Set();else S.p2Seen=new Set();
