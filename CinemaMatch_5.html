@@ -634,22 +634,20 @@ function buildQueue() {
 const imgCache = new Map();
 
 // Lädt ein Bild und speichert das Promise — mehrfache Aufrufe
-// warten alle auf dasselbe Promise (kein Doppelt-Laden)
+// warten alle auf dasselbe Promise (kein Doppelt-Laden).
+// WICHTIG: Fehlgeschlagene Ladevorgänge werden NICHT gecacht —
+// ein Netzwerkfehler führt sonst zu permanent null für diesen Pfad.
 function loadImg(path) {
   if (!path) return Promise.resolve(null);
   const url = IMG + path;
   if (imgCache.has(path)) return imgCache.get(path);
   const p = new Promise(resolve => {
     const img = new Image();
-    // WICHTIG: src ZUERST setzen, dann complete prüfen
-    // Wenn Bild bereits im Browser-Cache: complete=true, onload feuert nie!
     img.onload  = () => resolve(img);
-    img.onerror = () => resolve(null);
+    img.onerror = () => { imgCache.delete(path); resolve(null); };
     img.src = url;
-    // Falls bereits gecacht und geladen → sofort resolven
     if (img.complete && img.naturalWidth > 0) resolve(img);
-    // Falls gecacht aber Fehler → auch resolven
-    if (img.complete && img.naturalWidth === 0) resolve(null);
+    if (img.complete && img.naturalWidth === 0) { imgCache.delete(path); resolve(null); }
   });
   imgCache.set(path, p);
   return p;
@@ -1064,8 +1062,10 @@ function buildCardEl(card){
   // Warten bis Bild fertig geladen — dann Karte einblenden
   loadPoster(card, 8000).then(imgEl => {
     clearTimeout(slowTimer);
-    // Slot noch gültig? (User könnte schon weiter geswipt haben)
-    if(!document.getElementById('card-slot')) return;
+    // Slot noch gültig? Prüfe isConnected, nicht getElementById —
+    // getElementById findet sonst den Slot eines neuen Renders, was
+    // dazu führt dass das Poster kurz aufblitzt und dann verschwindet.
+    if(!slot.isConnected) return;
 
     // Spinner entfernen
     spinner.remove();
